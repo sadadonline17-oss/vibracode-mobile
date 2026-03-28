@@ -2,23 +2,29 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
+import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import React, { useCallback, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  useColorScheme,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ActionTabs, { ActionTabId } from "../components/ActionTabs";
 import AgentModal from "../components/AgentModal";
+import AnimatedOrb from "../components/AnimatedOrb";
+import FileActionRow from "../components/FileActionRow";
 import MessageBubble from "../components/MessageBubble";
+import PublishModal from "../components/PublishModal";
 import SessionsDrawer from "../components/SessionsDrawer";
+import TasksCard from "../components/TasksCard";
 import { CONFIG } from "../config";
 import { Message, useChat } from "../context/ChatContext";
 
@@ -35,43 +41,51 @@ export default function ChatScreen() {
     createSession,
     selectSession,
     deleteSession,
+    clearHistory,
     sendMessage,
+    toggleExpanded,
   } = useChat();
 
   const [input, setInput] = useState("");
   const [showAgent, setShowAgent] = useState(false);
   const [showSessions, setShowSessions] = useState(false);
+  const [showPublish, setShowPublish] = useState(false);
+  const [activeTab, setActiveTab] = useState<ActionTabId | undefined>(undefined);
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
 
   const listRef = useRef<FlatList<Message>>(null);
   const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme();
-
-  const agent = CONFIG.AGENTS.find((a) => a.id === selectedAgent);
   const messages = currentSession?.messages ?? [];
+  const topPad = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
+  const bottomPad = Platform.OS === "web" ? 34 : Math.max(insets.bottom - 30, 4);
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || isSending) return;
-    const text = input.trim();
+    const txt = input.trim();
     setInput("");
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await sendMessage(text);
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await sendMessage(txt);
   }, [input, isSending, sendMessage]);
 
   const handleVoice = useCallback(async () => {
+    if (Platform.OS === "web") {
+      Alert.alert("Voice", "Voice input available on mobile devices.");
+      return;
+    }
     if (isRecording && recording) {
       await recording.stopAndUnloadAsync();
       setIsRecording(false);
       setRecording(null);
-      Alert.alert("صوتي", "لتفعيل النسخ الصوتي أضف AssemblyAI API key.");
+      Alert.alert(
+        "Voice recorded",
+        "Add AssemblyAI API key for transcription."
+      );
       return;
     }
     const { granted } = await Audio.requestPermissionsAsync();
-    if (!granted) {
-      Alert.alert("تنبيه", "يجب السماح بالوصول للميكروفون.");
-      return;
-    }
+    if (!granted) return;
     await Audio.setAudioModeAsync({ allowsRecordingIOS: true });
     const { recording: rec } = await Audio.Recording.createAsync(
       Audio.RecordingOptionsPresets.HIGH_QUALITY
@@ -81,141 +95,180 @@ export default function ChatScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [isRecording, recording]);
 
-  const handleAttach = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      base64: false,
-      quality: 0.7,
-    });
-    if (!result.canceled) {
-      await sendMessage("[صورة مرفقة] " + (result.assets[0].fileName ?? ""));
-    }
-  }, [sendMessage]);
+  const handleTabPress = useCallback(
+    (tab: ActionTabId) => {
+      setActiveTab((prev) => (prev === tab ? undefined : tab));
+      switch (tab) {
+        case "publish":
+          setShowPublish(true);
+          break;
+        case "haptic":
+          if (Platform.OS !== "web")
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          break;
+        case "audio":
+          setInput("Add background music and sound effects");
+          break;
+        case "logs":
+          setInput("Show me the build logs and errors");
+          break;
+        case "db":
+          setInput("Add a database with user profiles and data persistence");
+          break;
+        case "payment":
+          setInput("Add in-app purchases and payment processing");
+          break;
+        case "image":
+          setInput("Generate app screenshots and preview images");
+          break;
+      }
+    },
+    []
+  );
 
-  const topPad =
-    Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
+  const renderItem = useCallback(
+    ({ item }: { item: Message }) => {
+      if (item.type === "tasks" && item.tasks) {
+        return (
+          <View style={{ marginVertical: 2 }}>
+            <TasksCard tasks={item.tasks} />
+          </View>
+        );
+      }
+      if (
+        item.type === "read" ||
+        item.type === "edit" ||
+        item.type === "bash"
+      ) {
+        return (
+          <FileActionRow
+            type={item.type}
+            fileCount={item.fileCount}
+            expanded={item.expanded}
+            onToggle={() => toggleExpanded(item.id)}
+          />
+        );
+      }
+      return (
+        <View style={{ marginVertical: 2 }}>
+          <MessageBubble item={item} />
+        </View>
+      );
+    },
+    [toggleExpanded]
+  );
 
   return (
     <View style={s.root}>
-      {/* TopBar */}
-      <View style={[s.topBar, { paddingTop: topPad + 8 }]}>
-        <TouchableOpacity
-          style={s.iconBtn}
+      {/* ── TopBar ── */}
+      <View style={[s.topBar, { paddingTop: topPad + 6 }]}>
+        <Pressable
+          style={s.titleRow}
           onPress={() => setShowSessions(true)}
         >
-          <Feather name="menu" size={20} color="#FFF" />
-        </TouchableOpacity>
+          <Text style={s.titleText} numberOfLines={1}>
+            {currentSession?.name ?? "Vibra Code"}
+          </Text>
+          <View style={s.chevronBtn}>
+            <Feather name="chevron-down" size={13} color="#AAA" />
+          </View>
+        </Pressable>
 
         <TouchableOpacity
-          style={s.agentPill}
-          onPress={() => setShowAgent(true)}
+          style={s.clearBtn}
+          onPress={clearHistory}
           activeOpacity={0.8}
         >
-          <View
-            style={[s.agentDot, { backgroundColor: agent?.color ?? "#6C47FF" }]}
-          />
-          <Text style={s.agentPillText}>{agent?.label}</Text>
-          <Feather name="chevron-down" size={12} color="#888" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={s.iconBtn}
-          onPress={() => createSession()}
-        >
-          <Feather name="plus" size={20} color="#FFF" />
+          <Feather name="refresh-ccw" size={13} color="#AAA" />
+          <Text style={s.clearBtnText}>Clear history</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Session name */}
-      {currentSession && (
-        <View style={s.sessionNameRow}>
-          <Text style={s.sessionNameText} numberOfLines={1}>
-            {currentSession.name}
-          </Text>
-        </View>
-      )}
-
-      {/* Messages */}
+      {/* ── Main area ── */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior="padding"
         keyboardVerticalOffset={0}
       >
-        <FlatList
-          ref={listRef}
-          data={messages}
-          renderItem={({ item }) => <MessageBubble item={item} />}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={[
-            s.listContent,
-            { paddingBottom: Platform.OS === "web" ? 100 : 20 },
-          ]}
-          inverted={false}
-          onContentSizeChange={() =>
-            listRef.current?.scrollToEnd({ animated: true })
-          }
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={
-            <View style={s.emptyChat}>
-              <Feather name="cpu" size={40} color="#222" />
-              <Text style={s.emptyChatText}>ابدأ المحادثة</Text>
-            </View>
-          }
-        />
+        <View style={{ flex: 1 }}>
+          {/* Animated Orb — partially visible, left edge */}
+          <View style={[s.orbWrap, { pointerEvents: "none" }]}>
+            <AnimatedOrb size={86} />
+          </View>
 
-        {/* BottomBar */}
-        <View
-          style={[
-            s.bottomBar,
-            {
-              paddingBottom:
-                Platform.OS === "web"
-                  ? 34
-                  : Math.max(insets.bottom, 8),
-            },
-          ]}
-        >
-          <TouchableOpacity style={s.smallBtn} onPress={handleAttach}>
-            <Feather name="paperclip" size={18} color="#888" />
+          <FlatList
+            ref={listRef}
+            data={messages}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={s.listContent}
+            onContentSizeChange={() =>
+              listRef.current?.scrollToEnd({ animated: true })
+            }
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <View style={s.emptyWrap}>
+                <Text style={s.emptyText}>What do you want to build?</Text>
+              </View>
+            }
+          />
+        </View>
+
+        {/* ── Input Bar ── */}
+        <View style={[s.inputBar, { paddingBottom: bottomPad }]}>
+          {/* Agent icon (asterisk) */}
+          <TouchableOpacity
+            style={s.agentBtn}
+            onPress={() => setShowAgent(true)}
+          >
+            <Text style={s.asterisk}>✦</Text>
           </TouchableOpacity>
 
+          {/* Image attach */}
           <TouchableOpacity
-            style={[s.smallBtn, isRecording && s.recordingBtn]}
-            onPress={handleVoice}
+            style={s.iconBtn}
+            onPress={async () => {
+              const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
+              if (!r.canceled)
+                sendMessage(
+                  "[Image] Attached: " + (r.assets[0].fileName ?? "image")
+                );
+            }}
           >
-            <Feather
-              name={isRecording ? "square" : "mic"}
-              size={18}
-              color={isRecording ? "#EF4444" : "#888"}
-            />
+            <Feather name="image" size={18} color="#555" />
           </TouchableOpacity>
 
           <TextInput
             style={s.input}
             value={input}
             onChangeText={setInput}
-            placeholder="صف تطبيقك..."
-            placeholderTextColor="#444"
+            placeholder="Message"
+            placeholderTextColor="#3A3A3A"
             multiline
-            maxLength={2000}
-            returnKeyType="default"
+            maxLength={3000}
+            onSubmitEditing={handleSend}
           />
 
+          {/* Mic */}
           <TouchableOpacity
-            style={[
-              s.sendBtn,
-              (!input.trim() || isSending) && s.sendBtnDisabled,
-            ]}
-            onPress={handleSend}
-            disabled={!input.trim() || isSending}
-            activeOpacity={0.8}
+            style={[s.iconBtn, isRecording && s.recActive]}
+            onPress={handleVoice}
           >
-            <Feather name="arrow-up" size={18} color="#FFF" />
+            <Feather
+              name={isRecording ? "square" : "mic"}
+              size={18}
+              color={isRecording ? "#EF4444" : "#555"}
+            />
           </TouchableOpacity>
         </View>
+
+        {/* ── Action Tabs ── */}
+        <ActionTabs mode="chat" activeTab={activeTab} onPress={handleTabPress} />
+        {Platform.OS === "web" && <View style={{ height: 34 }} />}
       </KeyboardAvoidingView>
 
-      {/* Modals */}
+      {/* ── Modals ── */}
       <AgentModal
         visible={showAgent}
         selectedAgent={selectedAgent}
@@ -224,7 +277,6 @@ export default function ChatScreen() {
         onSelectModel={setSelectedModel}
         onClose={() => setShowAgent(false)}
       />
-
       <SessionsDrawer
         visible={showSessions}
         sessions={sessions}
@@ -237,112 +289,119 @@ export default function ChatScreen() {
         onDeleteSession={deleteSession}
         onClose={() => setShowSessions(false)}
       />
+      <PublishModal visible={showPublish} onClose={() => setShowPublish(false)} />
     </View>
   );
 }
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0A0A0A" },
+
   topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#151515",
+    borderBottomColor: "#111",
+    backgroundColor: "#0A0A0A",
   },
-  iconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#1A1A1A",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  agentPill: {
+  titleRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1A1A1A",
-    paddingHorizontal: 12,
+    gap: 7,
+    flex: 1,
+  },
+  titleText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "700" as const,
+    maxWidth: 200,
+  },
+  chevronBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#1E1E1E",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  clearBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#161616",
+    paddingHorizontal: 11,
     paddingVertical: 7,
     borderRadius: 20,
-    gap: 6,
+    borderWidth: 1,
+    borderColor: "#222",
   },
-  agentDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  clearBtnText: { color: "#AAA", fontSize: 12 },
+
+  orbWrap: {
+    position: "absolute",
+    left: -42,
+    top: "32%",
+    zIndex: 1,
+    opacity: 0.8,
   },
-  agentPillText: {
-    color: "#FFF",
-    fontSize: 13,
-    fontWeight: "600" as const,
-  },
-  sessionNameRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: "#111",
-  },
-  sessionNameText: {
-    color: "#555",
-    fontSize: 11,
-    textAlign: "center",
-    fontWeight: "500" as const,
-  },
+
   listContent: {
-    padding: 12,
-    gap: 2,
+    padding: 14,
+    paddingLeft: 16,
     flexGrow: 1,
   },
-  emptyChat: {
+  emptyWrap: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    paddingTop: 100,
+    paddingTop: 80,
   },
-  emptyChatText: { color: "#333", fontSize: 14 },
-  bottomBar: {
+  emptyText: { color: "#2A2A2A", fontSize: 16 },
+
+  inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: 10,
     paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#151515",
-    gap: 8,
     backgroundColor: "#0A0A0A",
+    borderTopWidth: 1,
+    borderTopColor: "#111",
+    gap: 6,
   },
-  smallBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#151515",
+  agentBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#161616",
     justifyContent: "center",
     alignItems: "center",
   },
-  recordingBtn: { backgroundColor: "#EF444422" },
+  asterisk: {
+    color: "#F97316",
+    fontSize: 16,
+    fontWeight: "700" as const,
+    lineHeight: 20,
+  },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  recActive: {},
   input: {
     flex: 1,
-    backgroundColor: "#151515",
-    borderRadius: 20,
+    backgroundColor: "#141414",
+    borderRadius: 22,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 9,
     color: "#FFF",
     fontSize: 15,
     maxHeight: 120,
     minHeight: 38,
     borderWidth: 1,
-    borderColor: "#222",
+    borderColor: "#1E1E1E",
   },
-  sendBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#6C47FF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sendBtnDisabled: { backgroundColor: "#2A2A2A" },
 });

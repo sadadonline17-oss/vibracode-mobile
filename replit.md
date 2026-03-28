@@ -21,7 +21,8 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
+│   ├── api-server/         # Express API server
+│   └── vibracode-mobile/   # Vibra Code Android App (Expo/React Native)
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
@@ -90,6 +91,36 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used b
 ### `lib/api-client-react` (`@workspace/api-client-react`)
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
+
+### `artifacts/vibracode-mobile` (`@workspace/vibracode-mobile`)
+
+**Vibra Code** — Open-Source AI App Builder for Android (Expo SDK 54 / React Native).
+Users describe apps in English → AI builds them → live preview on phone.
+
+**Architecture:**
+- `app/` — expo-router pages. `index.tsx` renders `ChatScreen`. `(tabs)/` redirects to root.
+- `src/config.ts` — all API keys and agent configs (OpenRouter models, Clerk, E2B)
+- `src/context/ChatContext.tsx` — full session management, streaming AI via OpenRouter
+- `src/screens/ChatScreen.tsx` — main chat UI (dark theme, animated orb, input bar, action tabs)
+- `src/components/` — AnimatedOrb, TasksCard, FileActionRow, MessageBubble, AgentModal, SessionsDrawer, PublishModal, ActionTabs
+
+**AI Features:**
+- Real streaming from OpenRouter (Claude 3.5, Qwen 2.5 Coder, DeepSeek, Gemini Flash, Llama)
+- Multi-agent: Claude Code, Cursor, Gemini, Qwen Coder
+- Voice input (expo-av), Image input (expo-image-picker)
+- Task simulation flow: tasks → read files → edit files → AI response
+- AsyncStorage persistence across sessions
+
+**API Keys (stored in env vars):**
+- `EXPO_PUBLIC_OPENROUTER_KEY` — OpenRouter AI key
+- `EXPO_PUBLIC_CLERK_KEY` — Clerk auth public key
+- `EXPO_PUBLIC_E2B_KEY` — E2B sandbox key
+
+**Android APK Build:**
+- `eas.json` — EAS build profiles (development/preview/production)
+- `.github/workflows/build-apk.yml` — GitHub Actions: EAS Build (needs `EXPO_TOKEN` secret) or local Gradle fallback
+
+**Dev:** `pnpm --filter @workspace/vibracode-mobile run dev`
 
 ### `scripts` (`@workspace/scripts`)
 
