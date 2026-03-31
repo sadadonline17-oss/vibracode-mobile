@@ -8,7 +8,13 @@ export type AgentType =
   | "deepseek"
   | "llama";
 
-export type ProviderType = "openrouter" | "gemini-native";
+export type ProviderType = "openrouter" | "gemini-native" | "e2b";
+
+// E2B template name for each agent (null = not an E2B agent)
+export const E2B_AGENT_MAP: Partial<Record<AgentType, string>> = {
+  claude: "claude-code",
+  codex:  "codex",
+};
 
 export interface Agent {
   id: AgentType;
@@ -38,7 +44,8 @@ export const CONFIG = {
     process.env.EXPO_PUBLIC_CONVEX_URL ??
     "https://astute-ladybug-398.convex.cloud",
 
-  BACKEND_URL: process.env.EXPO_PUBLIC_BACKEND_URL ?? "",
+  BACKEND_URL: process.env.EXPO_PUBLIC_BACKEND_URL
+    ?? (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/api` : ""),
 
   E2B_API_KEY:
     process.env.EXPO_PUBLIC_E2B_KEY ??

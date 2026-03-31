@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { AgentType, CONFIG } from "../config";
+import { AgentType, CONFIG, E2B_AGENT_MAP } from "../config";
 import { useSettings } from "./SettingsContext";
 
 export type MessageType =
@@ -290,6 +290,64 @@ async function callWithFallback(
   }
 }
 
+// ── E2B Sandbox SSE streaming ─────────────────────────────────────────────
+async function callE2BStream(
+  backendUrl: string,
+  prompt: string,
+  e2bAgent: string,
+  sessionId: string,
+  openrouterKey: string,
+  signal: AbortSignal,
+  onEvent: (type: string, content: string) => void
+): Promise<void> {
+  const url = `${backendUrl}/e2b/stream`;
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, agent: e2bAgent, sessionId, openrouterKey }),
+    signal,
+  });
+
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => "");
+    throw new Error(`E2B error ${resp.status}: ${txt}`);
+  }
+
+  const reader = resp.body?.getReader();
+  if (!reader) throw new Error("No stream from E2B server");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let currentEvent = "message";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("event: ")) {
+        currentEvent = trimmed.slice(7).trim();
+      } else if (trimmed.startsWith("data: ")) {
+        const raw = trimmed.slice(6);
+        try {
+          const obj = JSON.parse(raw);
+          const content = obj.content ?? raw;
+          onEvent(currentEvent, typeof content === "string" ? content : JSON.stringify(content));
+        } catch {
+          onEvent(currentEvent, raw);
+        }
+        currentEvent = "message"; // reset after consuming
+      }
+    }
+  }
+}
+
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { getEffectiveOpenrouterKey } = useSettings();
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -476,6 +534,120 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       );
 
       try {
+        const e2bAgentName = E2B_AGENT_MAP[selectedAgent];
+        const backendUrl = CONFIG.BACKEND_URL;
+
+        // ── E2B path: claude-code or codex run in a real sandbox ──────────
+        if (e2bAgentName && backendUrl) {
+          let accumulated = "";
+
+          const addMsg = (type: MessageType, msgContent: string) => {
+            const newMsg: Message = {
+              id: generateId(),
+              type,
+              role: "assistant",
+              content: msgContent,
+              timestamp: Date.now(),
+            };
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sid
+                  ? { ...s, messages: [...s.messages, newMsg] }
+                  : s
+              )
+            );
+          };
+
+          await callE2BStream(
+            backendUrl,
+            content,
+            e2bAgentName,
+            sid,
+            getEffectiveOpenrouterKey(),
+            controller.signal,
+            (evType, evContent) => {
+              if (evType === "message") {
+                accumulated += evContent;
+                setSessions((prev) =>
+                  prev.map((s) =>
+                    s.id === sid
+                      ? {
+                          ...s,
+                          messages: s.messages.map((m) =>
+                            m.id === streamId
+                              ? { ...m, content: accumulated }
+                              : m
+                          ),
+                        }
+                      : s
+                  )
+                );
+              } else if (evType === "read") {
+                addMsg("read", evContent);
+              } else if (evType === "edit") {
+                addMsg("edit", evContent);
+              } else if (evType === "bash") {
+                addMsg("bash", evContent);
+              } else if (evType === "status") {
+                // update streaming msg status label
+                setSessions((prev) =>
+                  prev.map((s) =>
+                    s.id === sid
+                      ? {
+                          ...s,
+                          messages: s.messages.map((m) =>
+                            m.id === streamId && !accumulated
+                              ? { ...m, content: `⚙ ${evContent}` }
+                              : m
+                          ),
+                        }
+                      : s
+                  )
+                );
+              } else if (evType === "tasks") {
+                try {
+                  const taskData = JSON.parse(evContent);
+                  const taskItems = Array.isArray(taskData)
+                    ? taskData.map((t: any) => ({
+                        text: t.content ?? t.task ?? String(t),
+                        status: "done" as const,
+                      }))
+                    : [];
+                  const tasksMsg: Message = {
+                    id: generateId(),
+                    type: "tasks",
+                    role: "assistant",
+                    content: "",
+                    timestamp: Date.now(),
+                    tasks: taskItems,
+                  };
+                  setSessions((prev) =>
+                    prev.map((s) =>
+                      s.id === sid
+                        ? { ...s, messages: [...s.messages, tasksMsg] }
+                        : s
+                    )
+                  );
+                } catch {}
+              } else if (evType === "error") {
+                accumulated = `⚠️ ${evContent}`;
+                setSessions((prev) =>
+                  prev.map((s) =>
+                    s.id === sid
+                      ? {
+                          ...s,
+                          messages: s.messages.map((m) =>
+                            m.id === streamId ? { ...m, content: accumulated } : m
+                          ),
+                        }
+                      : s
+                  )
+                );
+              }
+            }
+          );
+        } else {
+        // ── OpenRouter path: all other agents ────────────────────────────
         const model = agent?.model ?? selectedModel;
         const fallback = agent?.fallback ?? selectedModel;
 
@@ -516,6 +688,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             );
           }
         );
+        } // end else OpenRouter
 
         setSessions((prev) =>
           prev.map((s) =>

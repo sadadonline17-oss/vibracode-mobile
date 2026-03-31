@@ -57,7 +57,8 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
+- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /healthz` (full path: `/api/healthz`); `src/routes/e2b.ts` exposes `POST /api/e2b/stream` (SSE) and `POST /api/e2b/run` (batch)
+- E2B integration: supports `claude-code` (template "claude"), `codex` (template "codex"), `junie` and `openclaw` (template "base"). SSE events: `status`, `message`, `read`, `edit`, `bash`, `tasks`, `done`, `error`
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
@@ -106,10 +107,17 @@ Users describe apps in English → AI builds them → live preview on phone.
 
 **AI Features:**
 - Real streaming from OpenRouter (Claude 3.5, Qwen 2.5 Coder, DeepSeek, Gemini Flash, Llama)
-- Multi-agent: Claude Code, Cursor, Gemini, Qwen Coder
+- **E2B Sandbox agents**: "claude" → `claude-code` template, "codex" → `codex` template (real code execution in isolated sandbox, SSE streaming via API server `/api/e2b/stream`)
+- OpenRouter agents: gemini, qwen, kimi, hermes, deepseek, llama (direct OpenRouter streaming)
 - Voice input (expo-av), Image input (expo-image-picker)
 - Task simulation flow: tasks → read files → edit files → AI response
 - AsyncStorage persistence across sessions
+- Settings screen: API key management (OpenRouter/Gemini), agent/model selector (⚙ icon in header)
+
+**Backend URL routing:**
+- Mobile constructs backend URL as `https://${EXPO_PUBLIC_DOMAIN}/api` (set in Expo workflow from `$REPLIT_DEV_DOMAIN`)
+- E2B agents call `${BACKEND_URL}/e2b/stream` — proxied to API server at port 8080
+- Routing via `E2B_AGENT_MAP` in `config.ts`: `{ claude: "claude-code", codex: "codex" }`
 
 **API Keys (stored in env vars):**
 - `EXPO_PUBLIC_OPENROUTER_KEY` — OpenRouter AI key
