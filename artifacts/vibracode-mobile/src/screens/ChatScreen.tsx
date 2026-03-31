@@ -174,19 +174,18 @@ export default function ChatScreen() {
 
   return (
     <View style={s.root}>
-      {/* ── TopBar ── */}
-      <View style={[s.topBar, { paddingTop: topPad + 6 }]}>
+      {/* ── TopBar (floating) ── */}
+      <View style={[s.topBar, { paddingTop: topPad + 4 }]}>
         <Pressable style={s.titleRow} onPress={() => setShowSessions(true)}>
           <Text style={s.titleText} numberOfLines={1}>
             {currentSession?.name ?? "Vibra Code"}
           </Text>
           <View style={s.chevronBtn}>
-            <Feather name="chevron-down" size={13} color="#AAA" />
+            <Feather name="chevron-down" size={12} color="#AAA" />
           </View>
         </Pressable>
 
         <View style={s.topRight}>
-          {/* Active provider indicator */}
           {activeAgent && (
             <TouchableOpacity
               style={[s.providerBadge, { borderColor: activeAgent.color + "40" }]}
@@ -198,20 +197,10 @@ export default function ChatScreen() {
               </Text>
             </TouchableOpacity>
           )}
-
-          <TouchableOpacity
-            style={s.clearBtn}
-            onPress={clearHistory}
-            activeOpacity={0.8}
-          >
+          <TouchableOpacity style={s.clearBtn} onPress={clearHistory} activeOpacity={0.8}>
             <Feather name="refresh-ccw" size={13} color="#AAA" />
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={s.settingsBtn}
-            onPress={() => setShowSettings(true)}
-            activeOpacity={0.8}
-          >
+          <TouchableOpacity style={s.settingsBtn} onPress={() => setShowSettings(true)} activeOpacity={0.8}>
             <Feather name="settings" size={15} color="#888" />
           </TouchableOpacity>
         </View>
@@ -234,7 +223,7 @@ export default function ChatScreen() {
             data={messages}
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={s.listContent}
+            contentContainerStyle={[s.listContent, { paddingTop: topPad + 60 }]}
             onContentSizeChange={() =>
               listRef.current?.scrollToEnd({ animated: true })
             }
@@ -356,14 +345,17 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0A0A0A" },
 
   topBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#111",
-    backgroundColor: "#0A0A0A",
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+    backgroundColor: "#0A0A0ACC",
   },
   titleRow: {
     flexDirection: "row",
@@ -439,8 +431,8 @@ const s = StyleSheet.create({
   },
 
   listContent: {
-    padding: 14,
-    paddingLeft: 16,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
     flexGrow: 1,
   },
   emptyWrap: {
