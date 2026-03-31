@@ -61,34 +61,34 @@ export default function SuggestionChips({ visible, onSelect }: Props) {
 
 const s = StyleSheet.create({
   wrapper: {
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingTop: 6,
+    paddingBottom: 2,
     backgroundColor: "#0A0A0A",
   },
   hint: {
-    color: "#333",
+    color: "#444",
     fontSize: 10,
     textAlign: "center",
-    marginBottom: 6,
+    marginBottom: 5,
     letterSpacing: 0.5,
   },
   row: {
     flexDirection: "row",
     paddingHorizontal: 10,
-    gap: 8,
+    gap: 7,
   },
   chip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
     borderWidth: 1,
-    backgroundColor: "#111",
+    backgroundColor: "#0E0E0E",
   },
   label: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
   },
 });

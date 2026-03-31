@@ -400,6 +400,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         if (e2bAgentName && backendUrl) {
           let accumulated = "";
 
+          // Inject active skills into E2B prompt
+          const skillsText = (activeSkills ?? []).join("\n\n");
+          const e2bPrompt = skillsText
+            ? `## Active Skills & Context\n${skillsText}\n\n## Task\n${content}`
+            : content;
+
           const addMsg = (type: MessageType, msgContent: string) => {
             const newMsg: Message = {
               id: generateId(),
@@ -419,7 +425,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
           await callE2BStream(
             backendUrl,
-            content,
+            e2bPrompt,
             e2bAgentName,
             sid,
             getEffectiveOpenrouterKey(),

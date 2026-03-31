@@ -239,14 +239,14 @@ export default function ChatScreen() {
           />
         </View>
 
-        {/* ── Suggestion Chips (above input, when no user messages) ── */}
+        {/* ── Action Tabs ── */}
+        <ActionTabs mode="chat" activeTab={activeTab} onPress={handleTabPress} />
+
+        {/* ── Suggestion Chips (directly above input bar) ── */}
         <SuggestionChips
           visible={!messages.some((m) => m.role === "user")}
           onSelect={(prompt) => { setInput(prompt); }}
         />
-
-        {/* ── Action Tabs ── */}
-        <ActionTabs mode="chat" activeTab={activeTab} onPress={handleTabPress} />
 
         {/* ── Input Bar ── */}
         <View style={[s.inputBar, { paddingBottom: bottomPad }]}>
