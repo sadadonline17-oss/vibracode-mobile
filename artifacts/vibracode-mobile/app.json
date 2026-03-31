@@ -24,7 +24,8 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.INTERNET",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "ios": {
@@ -62,8 +63,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "vibracode-app"
+        "projectId": "b9f6c24a-7ba8-4dde-9847-00d0890a9ee3"
       }
-    }
+    },
+    "owner": "admin44aa"
   }
 }
