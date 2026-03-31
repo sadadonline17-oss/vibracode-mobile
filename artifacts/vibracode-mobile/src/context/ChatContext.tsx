@@ -51,6 +51,7 @@ interface ChatContextValue {
   selectedAgent: AgentType;
   selectedModel: string;
   isSending: boolean;
+  activeSkills: string[];
   setSelectedAgent: (a: AgentType) => void;
   setSelectedModel: (m: string) => void;
   createSession: (name?: string) => string;
@@ -60,6 +61,8 @@ interface ChatContextValue {
   deleteSession: (id: string) => void;
   toggleExpanded: (msgId: string) => void;
   cancelMessage: () => void;
+  addActiveSkill: (skillPrompt: string, skillTitle: string) => void;
+  removeActiveSkill: (skillTitle: string) => void;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -230,7 +233,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [selectedAgent, setSelectedAgent] = useState<AgentType>(CONFIG.DEFAULT_AGENT);
   const [selectedModel, setSelectedModel] = useState(CONFIG.DEFAULT_MODEL);
   const [isSending, setIsSending] = useState(false);
+  const [activeSkills, setActiveSkills] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+
+  const addActiveSkill = useCallback((skillPrompt: string, skillTitle: string) => {
+    const entry = `### ${skillTitle}\n${skillPrompt}`;
+    setActiveSkills((prev) => prev.some((s) => s.startsWith(`### ${skillTitle}`)) ? prev : [...prev, entry]);
+  }, []);
+
+  const removeActiveSkill = useCallback((skillTitle: string) => {
+    setActiveSkills((prev) => prev.filter((s) => !s.startsWith(`### ${skillTitle}`)));
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
@@ -504,8 +517,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             .slice(-20)
             .map((m) => ({ role: m.role as string, content: m.content })) ?? [];
 
+        // Use per-agent system prompt if available
+        const agentSystemPrompt = agent?.systemPrompt ?? CONFIG.SYSTEM_PROMPT;
+
+        // Inject active skills context if any
+        const activeSkillsText = (activeSkills ?? []).join("\n\n");
+        const systemContent = activeSkillsText
+          ? `${agentSystemPrompt}\n\n## Active Skills & Rules\n${activeSkillsText}`
+          : agentSystemPrompt;
+
         const chatMessages = [
-          { role: "system", content: CONFIG.SYSTEM_PROMPT },
+          { role: "system", content: systemContent },
           ...history,
           { role: "user", content },
         ];
@@ -596,7 +618,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setIsSending(false);
       }
     },
-    [currentSessionId, selectedAgent, selectedModel, sessions, isSending, patchSession]
+    [currentSessionId, selectedAgent, selectedModel, sessions, isSending, patchSession, activeSkills]
   );
 
   return (
@@ -608,6 +630,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         selectedAgent,
         selectedModel,
         isSending,
+        activeSkills,
         setSelectedAgent,
         setSelectedModel,
         createSession,
@@ -617,6 +640,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         deleteSession,
         toggleExpanded,
         cancelMessage,
+        addActiveSkill,
+        removeActiveSkill,
       }}
     >
       {children}

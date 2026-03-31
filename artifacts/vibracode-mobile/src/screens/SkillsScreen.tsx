@@ -708,7 +708,7 @@ const CUSTOM_SKILLS_KEY = "vibracode_custom_skills_v2";
 
 export default function SkillsScreen() {
   const insets = useSafeAreaInsets();
-  const { sendMessage } = useChat();
+  const { sendMessage, addActiveSkill, removeActiveSkill, activeSkills } = useChat();
   const [tab, setTab] = useState<"skills" | "integrations">("skills");
   const [selectedCat, setSelectedCat] = useState("الكل");
   const [customSkills, setCustomSkills] = useState<Skill[]>([]);
@@ -747,14 +747,23 @@ export default function SkillsScreen() {
     await AsyncStorage.setItem(CUSTOM_SKILLS_KEY, JSON.stringify(updated));
   };
 
+  const isSkillActive = (skill: Skill) =>
+    activeSkills.some((s) => s.startsWith(`### ${skill.title}`));
+
   const handleSkill = (skill: Skill) => {
+    const alreadyActive = isSkillActive(skill);
     Alert.alert(
       skill.title,
-      "هل تريد إرسال هذا الطلب للذكاء الاصطناعي الآن؟",
+      alreadyActive
+        ? "هذه المهارة مفعّلة دائماً لجميع محادثاتك. ماذا تريد؟"
+        : "اختر طريقة استخدام هذه المهارة:",
       [
         { text: "إلغاء", style: "cancel" },
         ...(skill.custom ? [{ text: "حذف", style: "destructive" as const, onPress: () => deleteCustomSkill(skill.id) }] : []),
-        { text: "إرسال ✦", onPress: () => sendMessage(skill.prompt) },
+        alreadyActive
+          ? { text: "إلغاء التفعيل ✕", onPress: () => removeActiveSkill(skill.title) }
+          : { text: "تفعيل دائم 📌", onPress: () => { addActiveSkill(skill.prompt, skill.title); Alert.alert("تم التفعيل", `سيستخدم الوكيل مهارة "${skill.title}" في كل المحادثات`); } },
+        { text: "إرسال الآن ✦", onPress: () => sendMessage(skill.prompt) },
       ]
     );
   };
@@ -836,30 +845,40 @@ export default function SkillsScreen() {
             {customSkills.length > 0 && selectedCat === "الكل" && !search && (
               <Text style={s.sectionLabel}>مهاراتي المخصصة</Text>
             )}
-            {filteredSkills.map((skill) => (
-              <TouchableOpacity
-                key={skill.id}
-                style={[s.skillCard, IS_TABLET && s.skillCardTablet, skill.custom && s.skillCardCustom]}
-                onPress={() => handleSkill(skill)}
-                activeOpacity={0.7}
-              >
-                <View style={[s.skillIcon, { backgroundColor: skill.color + "20" }]}>
-                  <Feather name={skill.icon as any} size={20} color={skill.color} />
-                </View>
-                <View style={{ flex: 1, gap: 3 }}>
-                  <View style={s.skillTitleRow}>
-                    <Text style={s.skillTitle}>{skill.title}</Text>
-                    <View style={[s.freeBadge, { backgroundColor: skill.custom ? "#6C47FF20" : "#22C55E20" }]}>
-                      <Text style={[s.freeBadgeText, { color: skill.custom ? "#6C47FF" : "#22C55E" }]}>
-                        {skill.custom ? "مخصص" : skill.category}
-                      </Text>
-                    </View>
+            {filteredSkills.map((skill) => {
+              const active = isSkillActive(skill);
+              return (
+                <TouchableOpacity
+                  key={skill.id}
+                  style={[s.skillCard, IS_TABLET && s.skillCardTablet, skill.custom && s.skillCardCustom, active && { borderColor: skill.color + "55", borderWidth: 1 }]}
+                  onPress={() => handleSkill(skill)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[s.skillIcon, { backgroundColor: skill.color + "20" }]}>
+                    <Feather name={skill.icon as any} size={20} color={skill.color} />
                   </View>
-                  <Text style={s.skillDesc} numberOfLines={2}>{skill.description}</Text>
-                </View>
-                <Feather name="send" size={14} color="#2A2A2A" />
-              </TouchableOpacity>
-            ))}
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <View style={s.skillTitleRow}>
+                      <Text style={s.skillTitle}>{skill.title}</Text>
+                      {active && (
+                        <View style={[s.freeBadge, { backgroundColor: "#6C47FF30" }]}>
+                          <Text style={[s.freeBadgeText, { color: "#A78BFA" }]}>📌 مفعّل</Text>
+                        </View>
+                      )}
+                      {!active && (
+                        <View style={[s.freeBadge, { backgroundColor: skill.custom ? "#6C47FF20" : "#22C55E20" }]}>
+                          <Text style={[s.freeBadgeText, { color: skill.custom ? "#6C47FF" : "#22C55E" }]}>
+                            {skill.custom ? "مخصص" : skill.category}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={s.skillDesc} numberOfLines={2}>{skill.description}</Text>
+                  </View>
+                  <Feather name={active ? "check-circle" : "send"} size={14} color={active ? skill.color : "#2A2A2A"} />
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </>
       ) : (

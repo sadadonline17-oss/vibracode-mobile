@@ -23,6 +23,7 @@ import FileActionRow from "../components/FileActionRow";
 import MessageBubble from "../components/MessageBubble";
 import PublishModal from "../components/PublishModal";
 import SessionsDrawer from "../components/SessionsDrawer";
+import SuggestionChips from "../components/SuggestionChips";
 import TasksCard from "../components/TasksCard";
 import { CONFIG } from "../config";
 import { Message, useChat } from "../context/ChatContext";
@@ -36,6 +37,7 @@ export default function ChatScreen() {
     selectedAgent,
     selectedModel,
     isSending,
+    activeSkills,
     setSelectedAgent,
     setSelectedModel,
     createSession,
@@ -186,6 +188,11 @@ export default function ChatScreen() {
         </Pressable>
 
         <View style={s.topRight}>
+          {activeSkills.length > 0 && (
+            <View style={s.skillsBadge}>
+              <Text style={s.skillsBadgeText}>📌 {activeSkills.length}</Text>
+            </View>
+          )}
           {activeAgent && (
             <TouchableOpacity
               style={[s.providerBadge, { borderColor: activeAgent.color + "40" }]}
@@ -229,13 +236,14 @@ export default function ChatScreen() {
             }
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={
-              <View style={s.emptyWrap}>
-                <Text style={s.emptyText}>What do you want to build?</Text>
-              </View>
-            }
           />
         </View>
+
+        {/* ── Suggestion Chips (above input, when no user messages) ── */}
+        <SuggestionChips
+          visible={!messages.some((m) => m.role === "user")}
+          onSelect={(prompt) => { setInput(prompt); }}
+        />
 
         {/* ── Action Tabs ── */}
         <ActionTabs mode="chat" activeTab={activeTab} onPress={handleTabPress} />
@@ -435,12 +443,19 @@ const s = StyleSheet.create({
     paddingBottom: 14,
     flexGrow: 1,
   },
-  emptyWrap: {
-    flex: 1,
-    alignItems: "center",
-    paddingTop: 80,
+  skillsBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: "#6C47FF22",
+    borderWidth: 1,
+    borderColor: "#6C47FF44",
   },
-  emptyText: { color: "#2A2A2A", fontSize: 16 },
+  skillsBadgeText: {
+    color: "#A78BFA",
+    fontSize: 11,
+    fontWeight: "700",
+  },
 
   inputBar: {
     flexDirection: "row",
