@@ -32,6 +32,7 @@ export interface Message {
   fileCount?: number;
   expanded?: boolean;
   streaming?: boolean;
+  agentId?: AgentType;
 }
 
 export interface Session {
@@ -57,10 +58,11 @@ interface ChatContextValue {
   clearHistory: () => void;
   deleteSession: (id: string) => void;
   toggleExpanded: (msgId: string) => void;
+  cancelMessage: () => void;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
-const STORAGE_KEY = "vibracode_v3";
+const STORAGE_KEY = "vibracode_v4";
 
 export function generateId() {
   return Date.now().toString() + Math.random().toString(36).substr(2, 9);
@@ -72,51 +74,71 @@ function createWelcomeMessage(): Message {
     type: "message",
     role: "assistant",
     content:
-      "What do you want to build today? Describe your app and I'll build it for you.",
+      "What do you want to build today? Describe your app and I'll build it for you.\n\nYou can also switch AI provider using the ✦ button below.",
     timestamp: Date.now(),
   };
 }
 
-function makeTasksMessage(content: string): Message[] {
+function inferTasksFromPrompt(content: string): TaskItem[] {
   const lc = content.toLowerCase();
-  let tasks: TaskItem[];
 
-  if (lc.includes("airbnb") || lc.includes("booking")) {
-    tasks = [
-      { text: "Create home screen with search and listings", status: "active" },
-      { text: "Add listing detail screen", status: "pending" },
-      { text: "Create tab navigation structure", status: "pending" },
+  if (lc.includes("airbnb") || lc.includes("booking") || lc.includes("rental")) {
+    return [
+      { text: "Build home screen with search and map listings", status: "active" },
+      { text: "Create listing detail with photos and booking", status: "pending" },
+      { text: "Add user profile and saved listings", status: "pending" },
+      { text: "Implement tab navigation and routing", status: "pending" },
     ];
-  } else if (lc.includes("chat") || lc.includes("message")) {
-    tasks = [
+  }
+  if (lc.includes("chat") || lc.includes("message") || lc.includes("whatsapp")) {
+    return [
       { text: "Design chat bubble UI components", status: "active" },
-      { text: "Add real-time message state", status: "pending" },
-      { text: "Implement send functionality", status: "pending" },
+      { text: "Add contacts/conversations list screen", status: "pending" },
+      { text: "Implement real-time message state", status: "pending" },
     ];
-  } else if (lc.includes("todo") || lc.includes("task")) {
-    tasks = [
+  }
+  if (lc.includes("todo") || lc.includes("task") || lc.includes("checklist")) {
+    return [
       { text: "Create task list with CRUD operations", status: "active" },
-      { text: "Add swipe-to-delete gesture", status: "pending" },
-      { text: "Implement local persistence", status: "pending" },
+      { text: "Add swipe-to-delete and complete gestures", status: "pending" },
+      { text: "Implement local persistence with AsyncStorage", status: "pending" },
     ];
-  } else {
-    const name = content.slice(0, 35);
-    tasks = [
-      { text: `Design ${name} UI layout`, status: "active" },
-      { text: "Implement core functionality", status: "pending" },
-      { text: "Add navigation and routing", status: "pending" },
+  }
+  if (lc.includes("ecommerc") || lc.includes("shop") || lc.includes("store")) {
+    return [
+      { text: "Build product grid with search and filter", status: "active" },
+      { text: "Create product detail and cart screens", status: "pending" },
+      { text: "Add checkout and order confirmation flow", status: "pending" },
+    ];
+  }
+  if (lc.includes("social") || lc.includes("instagram") || lc.includes("feed")) {
+    return [
+      { text: "Build scrollable image feed screen", status: "active" },
+      { text: "Create post detail with likes and comments", status: "pending" },
+      { text: "Add user profile and follow system", status: "pending" },
+    ];
+  }
+  if (lc.includes("weather") || lc.includes("forecast")) {
+    return [
+      { text: "Build weather dashboard with current conditions", status: "active" },
+      { text: "Add 7-day forecast and hourly chart", status: "pending" },
+      { text: "Implement location detection and search", status: "pending" },
+    ];
+  }
+  if (lc.includes("music") || lc.includes("player") || lc.includes("spotify")) {
+    return [
+      { text: "Create music player UI with controls", status: "active" },
+      { text: "Build song list and playlist screens", status: "pending" },
+      { text: "Add progress bar and album art display", status: "pending" },
     ];
   }
 
+  const name = content.slice(0, 30).trim();
   return [
-    {
-      id: generateId(),
-      type: "tasks",
-      role: "assistant",
-      content: "",
-      timestamp: Date.now(),
-      tasks: tasks.map((t) => ({ ...t })),
-    },
+    { text: `Analyze requirements for ${name}`, status: "active" },
+    { text: "Design UI layout and navigation structure", status: "pending" },
+    { text: "Implement core functionality and logic", status: "pending" },
+    { text: "Add styling and responsive design", status: "pending" },
   ];
 }
 
@@ -129,7 +151,7 @@ function makeProgressMessages(tasks: TaskItem[]): Message[] {
     role: "assistant",
     content: "",
     timestamp: Date.now() + 100,
-    fileCount: 2,
+    fileCount: Math.floor(Math.random() * 3) + 2,
   });
 
   msgs.push({
@@ -138,7 +160,7 @@ function makeProgressMessages(tasks: TaskItem[]): Message[] {
     role: "assistant",
     content: "",
     timestamp: Date.now() + 200,
-    fileCount: 4,
+    fileCount: Math.floor(Math.random() * 4) + 3,
   });
 
   msgs.push({
@@ -159,12 +181,12 @@ function makeProgressMessages(tasks: TaskItem[]): Message[] {
     role: "assistant",
     content: "",
     timestamp: Date.now() + 400,
-    fileCount: 6,
+    fileCount: Math.floor(Math.random() * 3) + 4,
   });
 
   msgs.push({
     id: generateId(),
-    type: "read",
+    type: "bash",
     role: "assistant",
     content: "",
     timestamp: Date.now() + 500,
@@ -173,31 +195,104 @@ function makeProgressMessages(tasks: TaskItem[]): Message[] {
 
   msgs.push({
     id: generateId(),
-    type: "edit",
-    role: "assistant",
-    content: "",
-    timestamp: Date.now() + 600,
-    fileCount: 1,
-  });
-
-  msgs.push({
-    id: generateId(),
     type: "tasks",
     role: "assistant",
     content: "",
-    timestamp: Date.now() + 700,
+    timestamp: Date.now() + 600,
     tasks: tasks.map((t) => ({ ...t, status: "done" as const })),
   });
 
   return msgs;
 }
 
+async function callOpenRouter(
+  model: string,
+  messages: { role: string; content: string }[],
+  apiKey: string,
+  signal: AbortSignal,
+  onChunk: (text: string) => void
+): Promise<void> {
+  const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://vibracode.app",
+      "X-Title": "Vibra Code",
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: true,
+      max_tokens: 4096,
+      temperature: 0.7,
+    }),
+    signal,
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    let msg = `Error ${resp.status}`;
+    try {
+      const e = JSON.parse(errText);
+      msg = e?.error?.message ?? msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  const reader = resp.body?.getReader();
+  if (!reader) throw new Error("No response stream");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) continue;
+      const data = trimmed.slice(6);
+      if (data === "[DONE]") return;
+      try {
+        const parsed = JSON.parse(data);
+        const delta = parsed.choices?.[0]?.delta?.content ?? "";
+        if (delta) onChunk(delta);
+      } catch {}
+    }
+  }
+}
+
+async function callWithFallback(
+  primaryModel: string,
+  fallbackModel: string,
+  messages: { role: string; content: string }[],
+  apiKey: string,
+  signal: AbortSignal,
+  onChunk: (text: string) => void
+): Promise<void> {
+  try {
+    await callOpenRouter(primaryModel, messages, apiKey, signal, onChunk);
+  } catch (err: any) {
+    if (err?.name === "AbortError") throw err;
+    if (fallbackModel && fallbackModel !== primaryModel) {
+      onChunk("\n\n*[Switched to fallback model]*\n\n");
+      await callOpenRouter(fallbackModel, messages, apiKey, signal, onChunk);
+    } else {
+      throw err;
+    }
+  }
+}
+
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [selectedAgent, setSelectedAgent] = useState<AgentType>(
-    CONFIG.DEFAULT_AGENT
-  );
+  const [selectedAgent, setSelectedAgent] = useState<AgentType>(CONFIG.DEFAULT_AGENT);
   const [selectedModel, setSelectedModel] = useState(CONFIG.DEFAULT_MODEL);
   const [isSending, setIsSending] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -206,12 +301,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
         if (raw) {
-          const stored: Session[] = JSON.parse(raw);
-          if (stored.length > 0) {
-            setSessions(stored);
-            setCurrentSessionId(stored[0].id);
-            return;
-          }
+          try {
+            const stored: Session[] = JSON.parse(raw);
+            if (stored.length > 0) {
+              setSessions(stored);
+              setCurrentSessionId(stored[0].id);
+              return;
+            }
+          } catch {}
         }
         const id = generateId();
         const init: Session = {
@@ -227,8 +324,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (sessions.length > 0)
+    if (sessions.length > 0) {
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sessions)).catch(() => {});
+    }
   }, [sessions]);
 
   const currentSession = sessions.find((s) => s.id === currentSessionId) ?? null;
@@ -283,6 +381,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const cancelMessage = useCallback(() => {
+    abortRef.current?.abort();
+    setIsSending(false);
+  }, []);
+
   const patchSession = useCallback(
     (sid: string, fn: (s: Session) => Session) => {
       setSessions((prev) => prev.map((s) => (s.id === sid ? fn(s) : s)));
@@ -300,7 +403,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       setIsSending(true);
 
-      // User message
       const userMsg: Message = {
         id: generateId(),
         type: "message",
@@ -309,31 +411,52 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         timestamp: Date.now(),
       };
 
-      patchSession(currentSessionId, (s) => ({
-        ...s,
-        name: s.messages.length <= 1 ? content.slice(0, 40) : s.name,
-        messages: [...s.messages, userMsg],
-      }));
+      const sid = currentSessionId;
 
-      // Build task cards immediately for UX
-      const taskMsgs = makeTasksMessage(content);
-      const initialTasks = taskMsgs[0].tasks ?? [];
+      setSessions((prev) =>
+        prev.map((s) => {
+          if (s.id !== sid) return s;
+          return {
+            ...s,
+            name: s.messages.filter((m) => m.type === "message" && m.role === "user").length === 0
+              ? content.slice(0, 40)
+              : s.name,
+            messages: [...s.messages, userMsg],
+          };
+        })
+      );
 
-      patchSession(currentSessionId, (s) => ({
-        ...s,
-        messages: [...s.messages, userMsg, ...taskMsgs],
-      }));
+      // Infer tasks for visual UX
+      const tasks = inferTasksFromPrompt(content);
 
-      // Progress messages
-      await new Promise((r) => setTimeout(r, 600));
-      const progressMsgs = makeProgressMessages(initialTasks);
-      patchSession(currentSessionId, (s) => ({
-        ...s,
-        messages: [...s.messages, ...progressMsgs],
-      }));
+      const taskMsg: Message = {
+        id: generateId(),
+        type: "tasks",
+        role: "assistant",
+        content: "",
+        timestamp: Date.now() + 50,
+        tasks: tasks.map((t) => ({ ...t })),
+      };
 
-      // Streaming AI response
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === sid ? { ...s, messages: [...s.messages, taskMsg] } : s
+        )
+      );
+
+      await new Promise((r) => setTimeout(r, 500));
+
+      const progressMsgs = makeProgressMessages(tasks);
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === sid ? { ...s, messages: [...s.messages, ...progressMsgs] } : s
+        )
+      );
+
+      await new Promise((r) => setTimeout(r, 300));
+
       const streamId = generateId();
+      const agent = CONFIG.AGENTS.find((a) => a.id === selectedAgent);
       const streamMsg: Message = {
         id: streamId,
         type: "message",
@@ -341,91 +464,60 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         content: "",
         timestamp: Date.now(),
         streaming: true,
+        agentId: selectedAgent,
       };
 
-      patchSession(currentSessionId, (s) => ({
-        ...s,
-        messages: [...s.messages, streamMsg],
-      }));
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === sid ? { ...s, messages: [...s.messages, streamMsg] } : s
+        )
+      );
 
       try {
-        const agent = CONFIG.AGENTS.find((a) => a.id === selectedAgent);
         const model = agent?.model ?? selectedModel;
-        const session = sessions.find((s) => s.id === currentSessionId);
+        const fallback = agent?.fallback ?? selectedModel;
+
+        const session = sessions.find((s) => s.id === sid);
         const history =
           session?.messages
-            .filter((m) => m.type === "message" && m.role !== undefined)
-            .slice(-8)
-            .map((m) => ({ role: m.role, content: m.content })) ?? [];
+            .filter((m) => m.type === "message" && m.role !== undefined && m.content.trim())
+            .slice(-20)
+            .map((m) => ({ role: m.role as string, content: m.content })) ?? [];
 
-        const resp = await fetch(`${CONFIG.OPENROUTER_BASE_URL}/chat/completions`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${CONFIG.OPENROUTER_API_KEY}`,
-            "HTTP-Referer": "https://vibracode.app",
-            "X-Title": "Vibra Code",
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: "system", content: CONFIG.SYSTEM_PROMPT },
-              ...history,
-              { role: "user", content },
-            ],
-            stream: true,
-            max_tokens: 2000,
-          }),
-          signal: controller.signal,
-        });
+        const chatMessages = [
+          { role: "system", content: CONFIG.SYSTEM_PROMPT },
+          ...history,
+          { role: "user", content },
+        ];
 
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-        const reader = resp.body?.getReader();
-        if (!reader) throw new Error("No reader");
-
-        const decoder = new TextDecoder();
         let accumulated = "";
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const data = line.slice(6).trim();
-            if (data === "[DONE]") break;
-            try {
-              const parsed = JSON.parse(data);
-              const delta = parsed.choices?.[0]?.delta?.content ?? "";
-              if (delta) {
-                accumulated += delta;
-                setSessions((prev) =>
-                  prev.map((s) =>
-                    s.id === currentSessionId
-                      ? {
-                          ...s,
-                          messages: s.messages.map((m) =>
-                            m.id === streamId
-                              ? { ...m, content: accumulated }
-                              : m
-                          ),
-                        }
-                      : s
-                  )
-                );
-              }
-            } catch {}
+        await callWithFallback(
+          model,
+          fallback,
+          chatMessages,
+          CONFIG.OPENROUTER_API_KEY,
+          controller.signal,
+          (chunk) => {
+            accumulated += chunk;
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sid
+                  ? {
+                      ...s,
+                      messages: s.messages.map((m) =>
+                        m.id === streamId ? { ...m, content: accumulated } : m
+                      ),
+                    }
+                  : s
+              )
+            );
           }
-        }
+        );
 
-        // Mark streaming complete
         setSessions((prev) =>
           prev.map((s) =>
-            s.id === currentSessionId
+            s.id === sid
               ? {
                   ...s,
                   messages: s.messages.map((m) =>
@@ -436,20 +528,43 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           )
         );
       } catch (err: any) {
-        if (err?.name === "AbortError") return;
+        if (err?.name === "AbortError") {
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sid
+                ? {
+                    ...s,
+                    messages: s.messages.map((m) =>
+                      m.id === streamId
+                        ? { ...m, content: m.content || "⏹ Message cancelled.", streaming: false }
+                        : m
+                    ),
+                  }
+                : s
+            )
+          );
+          return;
+        }
+
+        const errMsg = err?.message ?? "Connection error";
+        const isQuota = errMsg.includes("429") || errMsg.toLowerCase().includes("rate limit");
+        const isModelUnavail = errMsg.includes("404") || errMsg.toLowerCase().includes("model");
+
+        let userErrMsg = `⚠️ ${errMsg}`;
+        if (isQuota) {
+          userErrMsg = "⚠️ Rate limit reached. Switching to another model — please try again.";
+        } else if (isModelUnavail) {
+          userErrMsg = "⚠️ This model isn't available. Try selecting a different AI provider.";
+        }
+
         setSessions((prev) =>
           prev.map((s) =>
-            s.id === currentSessionId
+            s.id === sid
               ? {
                   ...s,
                   messages: s.messages.map((m) =>
                     m.id === streamId
-                      ? {
-                          ...m,
-                          content:
-                            "⚠️ Connection error. Check your internet and try again.",
-                          streaming: false,
-                        }
+                      ? { ...m, content: userErrMsg, streaming: false }
                       : m
                   ),
                 }
@@ -480,6 +595,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         clearHistory,
         deleteSession,
         toggleExpanded,
+        cancelMessage,
       }}
     >
       {children}

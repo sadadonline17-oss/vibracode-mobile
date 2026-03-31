@@ -2,7 +2,6 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
-import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import React, { useCallback, useRef, useState } from "react";
 import {
@@ -44,6 +43,7 @@ export default function ChatScreen() {
     clearHistory,
     sendMessage,
     toggleExpanded,
+    cancelMessage,
   } = useChat();
 
   const [input, setInput] = useState("");
@@ -60,6 +60,8 @@ export default function ChatScreen() {
   const topPad = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : Math.max(insets.bottom - 30, 4);
 
+  const activeAgent = CONFIG.AGENTS.find((a) => a.id === selectedAgent);
+
   const handleSend = useCallback(async () => {
     if (!input.trim() || isSending) return;
     const txt = input.trim();
@@ -71,28 +73,33 @@ export default function ChatScreen() {
 
   const handleVoice = useCallback(async () => {
     if (Platform.OS === "web") {
-      Alert.alert("Voice", "Voice input available on mobile devices.");
+      Alert.alert("Voice", "Voice input is available on mobile devices only.");
       return;
     }
     if (isRecording && recording) {
       await recording.stopAndUnloadAsync();
       setIsRecording(false);
       setRecording(null);
-      Alert.alert(
-        "Voice recorded",
-        "Add AssemblyAI API key for transcription."
-      );
+      Alert.alert("Voice recorded", "Voice transcription coming soon.");
       return;
     }
-    const { granted } = await Audio.requestPermissionsAsync();
-    if (!granted) return;
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: true });
-    const { recording: rec } = await Audio.Recording.createAsync(
-      Audio.RecordingOptionsPresets.HIGH_QUALITY
-    );
-    setRecording(rec);
-    setIsRecording(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert("Permission needed", "Microphone permission is required.");
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true });
+      const { recording: rec } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(rec);
+      setIsRecording(true);
+      if (Platform.OS !== "web")
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {
+      Alert.alert("Error", "Could not start recording.");
+    }
   }, [isRecording, recording]);
 
   const handleTabPress = useCallback(
@@ -107,19 +114,19 @@ export default function ChatScreen() {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           break;
         case "audio":
-          setInput("Add background music and sound effects");
+          setInput("Add background music and sound effects to the app");
           break;
         case "logs":
-          setInput("Show me the build logs and errors");
+          setInput("Show me the build logs and any errors");
           break;
         case "db":
           setInput("Add a database with user profiles and data persistence");
           break;
         case "payment":
-          setInput("Add in-app purchases and payment processing");
+          setInput("Add in-app purchases and Stripe payment processing");
           break;
         case "image":
-          setInput("Generate app screenshots and preview images");
+          setInput("Generate app screenshots and preview images for the stores");
           break;
       }
     },
@@ -135,11 +142,7 @@ export default function ChatScreen() {
           </View>
         );
       }
-      if (
-        item.type === "read" ||
-        item.type === "edit" ||
-        item.type === "bash"
-      ) {
+      if (item.type === "read" || item.type === "edit" || item.type === "bash") {
         return (
           <FileActionRow
             type={item.type}
@@ -162,10 +165,7 @@ export default function ChatScreen() {
     <View style={s.root}>
       {/* ── TopBar ── */}
       <View style={[s.topBar, { paddingTop: topPad + 6 }]}>
-        <Pressable
-          style={s.titleRow}
-          onPress={() => setShowSessions(true)}
-        >
+        <Pressable style={s.titleRow} onPress={() => setShowSessions(true)}>
           <Text style={s.titleText} numberOfLines={1}>
             {currentSession?.name ?? "Vibra Code"}
           </Text>
@@ -174,14 +174,28 @@ export default function ChatScreen() {
           </View>
         </Pressable>
 
-        <TouchableOpacity
-          style={s.clearBtn}
-          onPress={clearHistory}
-          activeOpacity={0.8}
-        >
-          <Feather name="refresh-ccw" size={13} color="#AAA" />
-          <Text style={s.clearBtnText}>Clear history</Text>
-        </TouchableOpacity>
+        <View style={s.topRight}>
+          {/* Active provider indicator */}
+          {activeAgent && (
+            <TouchableOpacity
+              style={[s.providerBadge, { borderColor: activeAgent.color + "40" }]}
+              onPress={() => setShowAgent(true)}
+            >
+              <View style={[s.providerDot, { backgroundColor: activeAgent.color }]} />
+              <Text style={[s.providerText, { color: activeAgent.color }]}>
+                {activeAgent.label}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={s.clearBtn}
+            onPress={clearHistory}
+            activeOpacity={0.8}
+          >
+            <Feather name="refresh-ccw" size={13} color="#AAA" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Main area ── */}
@@ -191,7 +205,7 @@ export default function ChatScreen() {
         keyboardVerticalOffset={0}
       >
         <View style={{ flex: 1 }}>
-          {/* Animated Orb — partially visible, left edge */}
+          {/* Animated Orb */}
           <View style={[s.orbWrap, { pointerEvents: "none" }]}>
             <AnimatedOrb size={86} />
           </View>
@@ -217,12 +231,17 @@ export default function ChatScreen() {
 
         {/* ── Input Bar ── */}
         <View style={[s.inputBar, { paddingBottom: bottomPad }]}>
-          {/* Agent icon (asterisk) */}
+          {/* Agent / Provider selector button */}
           <TouchableOpacity
-            style={s.agentBtn}
+            style={[
+              s.agentBtn,
+              activeAgent && { backgroundColor: activeAgent.color + "22" },
+            ]}
             onPress={() => setShowAgent(true)}
           >
-            <Text style={s.asterisk}>✦</Text>
+            <Text style={[s.asterisk, activeAgent && { color: activeAgent.color }]}>
+              ✦
+            </Text>
           </TouchableOpacity>
 
           {/* Image attach */}
@@ -231,9 +250,7 @@ export default function ChatScreen() {
             onPress={async () => {
               const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
               if (!r.canceled)
-                sendMessage(
-                  "[Image] Attached: " + (r.assets[0].fileName ?? "image")
-                );
+                sendMessage("[Image] Describe what to build based on: " + (r.assets[0].fileName ?? "screenshot"));
             }}
           >
             <Feather name="image" size={18} color="#555" />
@@ -243,12 +260,33 @@ export default function ChatScreen() {
             style={s.input}
             value={input}
             onChangeText={setInput}
-            placeholder="Message"
-            placeholderTextColor="#3A3A3A"
+            placeholder="Describe your app..."
+            placeholderTextColor="#2E2E2E"
             multiline
-            maxLength={3000}
+            maxLength={4000}
             onSubmitEditing={handleSend}
+            returnKeyType="send"
+            blurOnSubmit={false}
           />
+
+          {/* Send / Cancel */}
+          {isSending ? (
+            <TouchableOpacity style={s.stopBtn} onPress={cancelMessage}>
+              <Feather name="square" size={16} color="#EF4444" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[s.sendBtn, input.trim().length > 0 && s.sendBtnActive]}
+              onPress={handleSend}
+              disabled={!input.trim()}
+            >
+              <Feather
+                name="arrow-up"
+                size={17}
+                color={input.trim().length > 0 ? "#FFF" : "#333"}
+              />
+            </TouchableOpacity>
+          )}
 
           {/* Mic */}
           <TouchableOpacity
@@ -316,8 +354,8 @@ const s = StyleSheet.create({
   titleText: {
     color: "#FFF",
     fontSize: 16,
-    fontWeight: "700" as const,
-    maxWidth: 200,
+    fontWeight: "700",
+    maxWidth: 160,
   },
   chevronBtn: {
     width: 22,
@@ -327,18 +365,40 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  clearBtn: {
+  topRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  providerBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#161616",
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 20,
+    borderWidth: 1,
+    backgroundColor: "#111",
+  },
+  providerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  providerText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  clearBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#161616",
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: "#222",
   },
-  clearBtnText: { color: "#AAA", fontSize: 12 },
 
   orbWrap: {
     position: "absolute",
@@ -381,7 +441,7 @@ const s = StyleSheet.create({
   asterisk: {
     color: "#F97316",
     fontSize: 16,
-    fontWeight: "700" as const,
+    fontWeight: "700",
     lineHeight: 20,
   },
   iconBtn: {
@@ -403,5 +463,26 @@ const s = StyleSheet.create({
     minHeight: 38,
     borderWidth: 1,
     borderColor: "#1E1E1E",
+  },
+  sendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#222",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sendBtnActive: {
+    backgroundColor: "#6C47FF",
+  },
+  stopBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#1A0A0A",
+    borderWidth: 1,
+    borderColor: "#EF444440",
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
