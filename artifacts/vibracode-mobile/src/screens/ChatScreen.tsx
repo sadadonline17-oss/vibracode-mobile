@@ -60,7 +60,7 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const messages = currentSession?.messages ?? [];
   const topPad = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : Math.max(insets.bottom - 30, 4);
+  const bottomPad = Platform.OS === "web" ? 34 : Math.max(insets.bottom + 10, 20);
 
   const activeAgent = CONFIG.AGENTS.find((a) => a.id === selectedAgent);
 
