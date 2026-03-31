@@ -2,7 +2,6 @@ import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Clipboard,
   Linking,
   Modal,
   Pressable,
@@ -13,13 +12,15 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// Most recent completed APK build
-const LATEST_APK_URL =
-  "https://expo.dev/artifacts/eas/3KQnQDQ4a55RZShXakoVHK.apk";
+let _Clipboard: { setString: (s: string) => void } | null = null;
+try {
+  const rn = require("react-native");
+  if (rn.Clipboard?.setString) _Clipboard = rn.Clipboard;
+} catch {}
 
-// Most recent triggered build (may still be building)
-const LATEST_BUILD_ID = "29c55ea4-fd67-4f82-b6ac-791ccd179bec";
+const LATEST_BUILD_ID = "35cb425c-dcac-42bc-b90f-0f69a47a8518";
 const LATEST_BUILD_URL = `https://expo.dev/accounts/admin44aa/projects/vibracode/builds/${LATEST_BUILD_ID}`;
+const PREV_APK_URL = "https://expo.dev/artifacts/eas/3KQnQDQ4a55RZShXakoVHK.apk";
 const APP_PAGE_URL = "https://expo.dev/accounts/admin44aa/projects/vibracode";
 
 interface Props {
@@ -33,7 +34,7 @@ export default function PublishModal({ visible, onClose }: Props) {
   const [tab, setTab] = useState<"download" | "publish">("download");
 
   const handleCopy = () => {
-    Clipboard.setString(LATEST_APK_URL);
+    _Clipboard?.setString(LATEST_BUILD_URL);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -54,14 +55,14 @@ export default function PublishModal({ visible, onClose }: Props) {
 
           {/* Header */}
           <View style={s.headerRow}>
-            <View style={s.successBadge}>
-              <Feather name="check-circle" size={18} color="#22C55E" />
-              <Text style={s.successText}>APK جاهز للتحميل</Text>
+            <View style={s.buildingBadge}>
+              <ActivityIndicator size="small" color="#F97316" />
+              <Text style={s.buildingText}>جارٍ البناء — EAS Build</Text>
             </View>
           </View>
 
           <Text style={s.title}>نشر تطبيق Vibra Code</Text>
-          <Text style={s.subtitle}>ملف APK جاهز — بُني بـ EAS Build</Text>
+          <Text style={s.subtitle}>بناء APK جارٍ الآن على Expo Build Servers</Text>
 
           {/* Tab switcher */}
           <View style={s.tabRow}>
@@ -85,15 +86,15 @@ export default function PublishModal({ visible, onClose }: Props) {
 
           {tab === "download" ? (
             <>
-              {/* Build Info */}
+              {/* Current Build Info */}
               <View style={s.buildInfo}>
                 <View style={s.buildInfoRow}>
                   <Feather name="package" size={14} color="#6C47FF" />
-                  <Text style={s.buildInfoText}>Vibra Code v1.0.0 · Android APK</Text>
+                  <Text style={s.buildInfoText}>Vibra Code v1.0.2 · Android APK</Text>
                 </View>
                 <View style={s.buildInfoRow}>
                   <Feather name="cpu" size={14} color="#22C55E" />
-                  <Text style={s.buildInfoText}>SDK 54 · EAS Build · Internal Distribution</Text>
+                  <Text style={s.buildInfoText}>SDK 54 · EAS Build · preview</Text>
                 </View>
                 <View style={s.buildInfoRow}>
                   <Feather name="calendar" size={14} color="#F97316" />
@@ -102,37 +103,47 @@ export default function PublishModal({ visible, onClose }: Props) {
                 <View style={s.buildInfoRow}>
                   <Feather name="hash" size={14} color="#6E7681" />
                   <Text style={s.buildInfoText} numberOfLines={1}>
-                    Build: {LATEST_BUILD_ID.slice(0, 8)}…
+                    Build: {LATEST_BUILD_ID.slice(0, 8)}… (جارٍ)
                   </Text>
                 </View>
               </View>
 
-              {/* Download buttons */}
+              {/* Build in progress notice */}
+              <View style={s.buildNotice}>
+                <Feather name="clock" size={14} color="#F97316" />
+                <Text style={s.buildNoticeText}>
+                  البناء الأحدث يستغرق ~10-15 دقيقة. انقر "عرض البناء" للمتابعة.
+                </Text>
+              </View>
+
+              {/* View build button */}
               <TouchableOpacity
                 style={s.downloadBtn}
-                onPress={() => Linking.openURL(LATEST_APK_URL)}
+                onPress={() => Linking.openURL(LATEST_BUILD_URL)}
                 activeOpacity={0.85}
               >
-                <Feather name="download" size={18} color="#FFF" />
-                <Text style={s.downloadBtnText}>تحميل APK مباشرة</Text>
+                <Feather name="external-link" size={18} color="#FFF" />
+                <Text style={s.downloadBtnText}>عرض البناء الحالي على Expo</Text>
               </TouchableOpacity>
 
+              {/* Copy build URL */}
               <TouchableOpacity
                 style={s.copyRow}
                 onPress={handleCopy}
                 activeOpacity={0.7}
               >
-                <Text style={s.copyUrl} numberOfLines={1}>{LATEST_APK_URL}</Text>
+                <Text style={s.copyUrl} numberOfLines={1}>{LATEST_BUILD_URL}</Text>
                 <Feather name={copied ? "check" : "copy"} size={14} color={copied ? "#22C55E" : "#444"} />
               </TouchableOpacity>
 
+              {/* Previous APK */}
               <TouchableOpacity
                 style={s.secondaryBtn}
-                onPress={() => Linking.openURL(LATEST_BUILD_URL)}
+                onPress={() => Linking.openURL(PREV_APK_URL)}
                 activeOpacity={0.8}
               >
-                <Feather name="external-link" size={14} color="#6C47FF" />
-                <Text style={s.secondaryBtnText}>عرض تفاصيل البناء على Expo</Text>
+                <Feather name="download" size={14} color="#6C47FF" />
+                <Text style={s.secondaryBtnText}>تحميل البناء السابق (APK مكتمل)</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -214,18 +225,18 @@ const s = StyleSheet.create({
     marginBottom: 20,
   },
   headerRow: { alignItems: "center", marginBottom: 10 },
-  successBadge: {
+  buildingBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#22C55E18",
+    backgroundColor: "#F9731618",
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: "#22C55E30",
+    borderColor: "#F9731630",
   },
-  successText: { color: "#22C55E", fontSize: 12, fontWeight: "700" },
+  buildingText: { color: "#F97316", fontSize: 12, fontWeight: "700" },
   title: {
     color: "#FFF",
     fontSize: 20,
@@ -266,12 +277,24 @@ const s = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#1A1A1A",
   },
   buildInfoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   buildInfoText: { color: "#777", fontSize: 12 },
+  buildNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#1A0F08",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#F9731630",
+  },
+  buildNoticeText: { color: "#F97316", fontSize: 12, flex: 1, lineHeight: 18 },
   downloadBtn: {
     flexDirection: "row",
     alignItems: "center",

@@ -511,7 +511,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         );
       }
     },
-    [selectedAgent, selectedModel, sessions, activeSkills, getEffectiveOpenrouterKey]
+    [selectedAgent, selectedModel, activeSkills, getEffectiveOpenrouterKey]
   );
 
   const sendMessage = useCallback(

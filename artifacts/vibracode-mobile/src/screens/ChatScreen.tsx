@@ -68,7 +68,7 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const messages = currentSession?.messages ?? [];
   const topPad = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : Math.max(insets.bottom + 10, 20);
+  const hasUserMessages = messages.some((m) => m.role === "user");
 
   const activeAgent = CONFIG.AGENTS.find((a) => a.id === selectedAgent);
 
@@ -81,39 +81,30 @@ export default function ChatScreen() {
     await sendMessage(txt);
   }, [input, isSending, sendMessage]);
 
-  // ── Voice recording with real Whisper transcription ──────────────────
+  // ── Real voice recording with Whisper transcription ──────────────────────
   const handleVoice = useCallback(async () => {
     if (Platform.OS === "web") {
       Alert.alert("الصوت", "إدخال الصوت متاح فقط على الأجهزة المحمولة.");
       return;
     }
 
-    // Stop recording and transcribe
     if (isRecording && recording) {
       try {
         setIsRecording(false);
         setIsTranscribing(true);
-
         await recording.stopAndUnloadAsync();
         const uri = recording.getURI();
         setRecording(null);
 
-        if (!uri) {
-          setIsTranscribing(false);
-          return;
-        }
+        if (!uri) { setIsTranscribing(false); return; }
 
-        // Read audio file as base64
         let base64Audio: string | null = null;
         try {
-          const response = await fetch(uri);
-          const blob = await response.blob();
+          const resp = await fetch(uri);
+          const blob = await resp.blob();
           base64Audio = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
-            reader.onload = () => {
-              const result = reader.result as string;
-              resolve(result.split(",")[1] ?? "");
-            };
+            reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
             reader.onerror = reject;
             reader.readAsDataURL(blob);
           });
@@ -125,7 +116,6 @@ export default function ChatScreen() {
           return;
         }
 
-        // Call API server transcription endpoint
         const backendUrl = CONFIG.BACKEND_URL;
         if (!backendUrl) {
           setIsTranscribing(false);
@@ -133,7 +123,7 @@ export default function ChatScreen() {
           return;
         }
 
-        const transcribeRes = await fetch(`${backendUrl}/transcribe`, {
+        const res = await fetch(`${backendUrl}/transcribe`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -144,74 +134,52 @@ export default function ChatScreen() {
           }),
         });
 
-        if (transcribeRes.ok) {
-          const { text } = (await transcribeRes.json()) as { text: string };
-          if (text?.trim()) {
-            setInput(text.trim());
-          } else {
-            Alert.alert("لا يوجد كلام", "لم يتم الكشف عن أي كلام. حاول مرة أخرى.");
-          }
+        if (res.ok) {
+          const { text } = (await res.json()) as { text: string };
+          if (text?.trim()) setInput(text.trim());
+          else Alert.alert("لا يوجد كلام", "لم يتم الكشف عن أي كلام. حاول مجدداً.");
         } else {
-          const errData = await transcribeRes.json().catch(() => ({})) as any;
-          Alert.alert("خطأ في التفريغ", errData.error ?? "فشلت عملية التفريغ.");
+          const e = await res.json().catch(() => ({})) as any;
+          Alert.alert("خطأ في التفريغ", e.error ?? "فشل التفريغ.");
         }
       } catch (e: any) {
-        Alert.alert("خطأ", e?.message ?? "فشل تفريغ الصوت.");
+        Alert.alert("خطأ", e?.message ?? "فشل التفريغ.");
       } finally {
         setIsTranscribing(false);
       }
       return;
     }
 
-    // Start recording
     try {
       const { granted } = await Audio.requestPermissionsAsync();
-      if (!granted) {
-        Alert.alert("إذن مطلوب", "يجب السماح باستخدام الميكروفون.");
-        return;
-      }
+      if (!granted) { Alert.alert("إذن مطلوب", "يجب السماح باستخدام الميكروفون."); return; }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true });
-      const { recording: rec } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       setRecording(rec);
       setIsRecording(true);
-      if (Platform.OS !== "web")
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (e) {
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {
       Alert.alert("خطأ", "تعذر بدء التسجيل.");
     }
   }, [isRecording, recording, groqKey, getEffectiveOpenrouterKey]);
 
-  // ── Image picker with real vision support ────────────────────────────
+  // ── Image picker with real vision support ────────────────────────────────
   const handleImagePick = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         quality: 0.8,
         base64: true,
         allowsEditing: false,
-        mediaTypes: "images",
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
       });
-
       if (result.canceled || !result.assets?.[0]) return;
-
       const asset = result.assets[0];
-      const base64 = asset.base64;
-
-      if (!base64) {
-        Alert.alert("خطأ", "تعذر قراءة الصورة.");
-        return;
-      }
-
-      // Determine MIME type
+      if (!asset.base64) { Alert.alert("خطأ", "تعذر قراءة الصورة."); return; }
       const mimeType = asset.mimeType ?? "image/jpeg";
       const userText = input.trim() || "ما الذي يمكن بناؤه استناداً لهذه الصورة؟";
       setInput("");
-
-      if (Platform.OS !== "web")
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-      await sendVisionMessage(userText, base64, mimeType);
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await sendVisionMessage(userText, asset.base64, mimeType);
     } catch (e: any) {
       Alert.alert("خطأ", e?.message ?? "تعذر اختيار الصورة.");
     }
@@ -221,37 +189,18 @@ export default function ChatScreen() {
     (tab: ActionTabId) => {
       setActiveTab((prev) => (prev === tab ? undefined : tab));
       switch (tab) {
-        case "publish":
-          setShowPublish(true);
-          break;
+        case "publish":   setShowPublish(true); break;
         case "haptic":
-          if (Platform.OS !== "web")
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           break;
-        case "audio":
-          setInput("أضف موسيقى خلفية ومؤثرات صوتية للتطبيق");
-          break;
-        case "logs":
-          setInput("أظهر سجلات البناء والأخطاء");
-          break;
-        case "db":
-          setInput("أضف قاعدة بيانات Convex مع ملفات المستخدمين والمزامنة الفورية");
-          break;
-        case "payment":
-          setInput("أضف نظام دفع مع Stripe ومدفوعات داخل التطبيق");
-          break;
-        case "image":
-          handleImagePick();
-          break;
-        case "github":
-          setInput("اربط التطبيق بـ GitHub: أنشئ مستودعاً، أضف CI/CD بـ GitHub Actions، واضبط النشر التلقائي");
-          break;
-        case "test":
-          setInput("اكتب اختبارات شاملة للتطبيق: Unit Tests بـ Jest، Integration Tests، وE2E Tests");
-          break;
-        case "deploy":
-          setInput("ابنِ ملف APK للأندرويد بـ EAS Build وأرسل رابط التحميل");
-          break;
+        case "audio":     setInput("أضف موسيقى خلفية ومؤثرات صوتية للتطبيق"); break;
+        case "logs":      setInput("أظهر سجلات البناء والأخطاء"); break;
+        case "db":        setInput("أضف قاعدة بيانات Convex مع ملفات المستخدمين والمزامنة الفورية"); break;
+        case "payment":   setInput("أضف نظام دفع مع Stripe ومدفوعات داخل التطبيق"); break;
+        case "image":     handleImagePick(); break;
+        case "github":    setInput("اربط التطبيق بـ GitHub: أنشئ مستودعاً، أضف CI/CD بـ GitHub Actions، واضبط النشر التلقائي"); break;
+        case "test":      setInput("اكتب اختبارات شاملة للتطبيق: Unit Tests بـ Jest، Integration Tests، وE2E Tests"); break;
+        case "deploy":    setInput("ابنِ ملف APK للأندرويد بـ EAS Build وأرسل رابط التحميل"); break;
       }
     },
     [handleImagePick]
@@ -260,11 +209,7 @@ export default function ChatScreen() {
   const renderItem = useCallback(
     ({ item }: { item: Message }) => {
       if (item.type === "tasks" && item.tasks) {
-        return (
-          <View style={{ marginVertical: 2 }}>
-            <TasksCard tasks={item.tasks} />
-          </View>
-        );
+        return <View style={s.msgWrap}><TasksCard tasks={item.tasks} /></View>;
       }
       if (item.type === "read" || item.type === "edit" || item.type === "bash") {
         return (
@@ -276,31 +221,23 @@ export default function ChatScreen() {
           />
         );
       }
-      return (
-        <View style={{ marginVertical: 2 }}>
-          <MessageBubble item={item} />
-        </View>
-      );
+      return <View style={s.msgWrap}><MessageBubble item={item} /></View>;
     },
     [toggleExpanded]
   );
 
-  const micColor = isRecording ? "#EF4444" : isTranscribing ? "#F97316" : "#555";
-  const micIcon = isRecording ? "square" : isTranscribing ? "loader" : "mic";
-
   return (
     <View style={s.root}>
-      {/* ── TopBar (floating) ── */}
+      {/* ── Floating TopBar ── */}
       <View style={[s.topBar, { paddingTop: topPad + 4 }]}>
         <Pressable style={s.titleRow} onPress={() => setShowSessions(true)}>
           <Text style={s.titleText} numberOfLines={1}>
             {currentSession?.name ?? "Vibra Code"}
           </Text>
           <View style={s.chevronBtn}>
-            <Feather name="chevron-down" size={12} color="#AAA" />
+            <Feather name="chevron-down" size={11} color="#666" />
           </View>
         </Pressable>
-
         <View style={s.topRight}>
           {activeSkills.length > 0 && (
             <View style={s.skillsBadge}>
@@ -309,97 +246,76 @@ export default function ChatScreen() {
           )}
           {activeAgent && (
             <TouchableOpacity
-              style={[s.providerBadge, { borderColor: activeAgent.color + "40" }]}
+              style={[s.providerBadge, { borderColor: activeAgent.color + "50" }]}
               onPress={() => setShowAgent(true)}
             >
               <View style={[s.providerDot, { backgroundColor: activeAgent.color }]} />
-              <Text style={[s.providerText, { color: activeAgent.color }]}>
-                {activeAgent.label}
-              </Text>
+              <Text style={[s.providerText, { color: activeAgent.color }]}>{activeAgent.label}</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={s.clearBtn} onPress={clearHistory} activeOpacity={0.8}>
-            <Feather name="refresh-ccw" size={13} color="#AAA" />
+          <TouchableOpacity style={s.iconBtn32} onPress={clearHistory}>
+            <Feather name="refresh-ccw" size={13} color="#666" />
           </TouchableOpacity>
-          <TouchableOpacity style={s.settingsBtn} onPress={() => setShowSettings(true)} activeOpacity={0.8}>
-            <Feather name="settings" size={15} color="#888" />
+          <TouchableOpacity style={s.iconBtn32} onPress={() => setShowSettings(true)}>
+            <Feather name="settings" size={14} color="#666" />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ── Main area ── */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior="padding"
-        keyboardVerticalOffset={0}
-      >
-        <View style={{ flex: 1 }}>
-          {/* Animated Orb */}
-          <View style={[s.orbWrap, { pointerEvents: "none" }]}>
-            <AnimatedOrb size={86} />
-          </View>
+      {/* ── Background orb ── */}
+      <View style={s.orbWrap} pointerEvents="none">
+        <AnimatedOrb size={80} />
+      </View>
 
-          <FlatList
-            ref={listRef}
-            data={messages}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={[s.listContent, { paddingTop: topPad + 60 }]}
-            onContentSizeChange={() =>
-              listRef.current?.scrollToEnd({ animated: true })
-            }
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          />
-        </View>
+      {/* ── Main chat area ── */}
+      <KeyboardAvoidingView style={s.flex1} behavior="padding" keyboardVerticalOffset={0}>
+        {/* Messages list — fills all space, content sticks to bottom */}
+        <FlatList
+          ref={listRef}
+          data={messages}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[
+            s.listContent,
+            { paddingTop: topPad + 54 },
+            { flexGrow: 1, justifyContent: "flex-end" },
+          ]}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        />
 
         {/* ── Action Tabs ── */}
         <ActionTabs mode="chat" activeTab={activeTab} onPress={handleTabPress} />
 
-        {/* ── Suggestion Chips (directly above input bar) ── */}
-        <SuggestionChips
-          visible={!messages.some((m) => m.role === "user")}
-          onSelect={(prompt) => { setInput(prompt); }}
-        />
+        {/* ── Suggestion Chips (above input, only when no messages) ── */}
+        <SuggestionChips visible={!hasUserMessages} onSelect={(p) => setInput(p)} />
 
-        {/* ── Transcribing indicator ── */}
-        {isTranscribing && (
-          <View style={s.transcribingBanner}>
-            <ActivityIndicator size="small" color="#F97316" />
-            <Text style={s.transcribingText}>جارٍ تفريغ الصوت...</Text>
+        {/* ── Status Banners ── */}
+        {isRecording && (
+          <View style={s.recBanner}>
+            <View style={s.recDot} />
+            <Text style={s.recText}>جارٍ التسجيل — اضغط مجدداً للإيقاف</Text>
           </View>
         )}
-
-        {/* ── Recording indicator ── */}
-        {isRecording && (
-          <View style={s.recordingBanner}>
-            <View style={s.recordingDot} />
-            <Text style={s.recordingText}>جارٍ التسجيل... اضغط مجدداً للإيقاف</Text>
+        {isTranscribing && (
+          <View style={s.transBanner}>
+            <ActivityIndicator size="small" color="#F97316" />
+            <Text style={s.transText}>جارٍ تفريغ الصوت...</Text>
           </View>
         )}
 
         {/* ── Input Bar ── */}
-        <View style={[s.inputBar, { paddingBottom: bottomPad }]}>
-          {/* Agent / Provider selector button */}
+        <View style={s.inputBar}>
           <TouchableOpacity
-            style={[
-              s.agentBtn,
-              activeAgent && { backgroundColor: activeAgent.color + "22" },
-            ]}
+            style={[s.agentBtn, activeAgent && { backgroundColor: activeAgent.color + "22" }]}
             onPress={() => setShowAgent(true)}
           >
-            <Text style={[s.asterisk, activeAgent && { color: activeAgent.color }]}>
-              ✦
-            </Text>
+            <Text style={[s.asterisk, activeAgent && { color: activeAgent.color }]}>✦</Text>
           </TouchableOpacity>
 
-          {/* Image attach */}
-          <TouchableOpacity
-            style={s.iconBtn}
-            onPress={handleImagePick}
-            disabled={isSending}
-          >
-            <Feather name="image" size={18} color={isSending ? "#333" : "#555"} />
+          <TouchableOpacity style={s.inputIconBtn} onPress={handleImagePick} disabled={isSending}>
+            <Feather name="image" size={18} color={isSending ? "#252525" : "#444"} />
           </TouchableOpacity>
 
           <TextInput
@@ -407,7 +323,7 @@ export default function ChatScreen() {
             value={input}
             onChangeText={setInput}
             placeholder="صف تطبيقك..."
-            placeholderTextColor="#2E2E2E"
+            placeholderTextColor="#252525"
             multiline
             maxLength={4000}
             onSubmitEditing={handleSend}
@@ -415,28 +331,22 @@ export default function ChatScreen() {
             blurOnSubmit={false}
           />
 
-          {/* Send / Cancel */}
           {isSending ? (
             <TouchableOpacity style={s.stopBtn} onPress={cancelMessage}>
-              <Feather name="square" size={16} color="#EF4444" />
+              <Feather name="square" size={15} color="#EF4444" />
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[s.sendBtn, input.trim().length > 0 && s.sendBtnActive]}
+              style={[s.sendBtn, input.trim() && s.sendBtnActive]}
               onPress={handleSend}
               disabled={!input.trim()}
             >
-              <Feather
-                name="arrow-up"
-                size={17}
-                color={input.trim().length > 0 ? "#FFF" : "#333"}
-              />
+              <Feather name="arrow-up" size={16} color={input.trim() ? "#FFF" : "#252525"} />
             </TouchableOpacity>
           )}
 
-          {/* Mic */}
           <TouchableOpacity
-            style={[s.iconBtn, isRecording && s.recActive]}
+            style={[s.inputIconBtn, isRecording && s.recActive]}
             onPress={handleVoice}
             disabled={isTranscribing || isSending}
           >
@@ -446,12 +356,14 @@ export default function ChatScreen() {
               <Feather
                 name={isRecording ? "square" : "mic"}
                 size={18}
-                color={micColor}
+                color={isRecording ? "#EF4444" : "#444"}
               />
             )}
           </TouchableOpacity>
         </View>
-        {Platform.OS === "web" && <View style={{ height: 34 }} />}
+
+        {/* Safe area bottom padding */}
+        <View style={s.safeBottom} />
       </KeyboardAvoidingView>
 
       {/* ── Modals ── */}
@@ -468,10 +380,7 @@ export default function ChatScreen() {
         sessions={sessions}
         currentSessionId={currentSessionId}
         onSelectSession={selectSession}
-        onCreateSession={() => {
-          createSession();
-          setShowSessions(false);
-        }}
+        onCreateSession={() => { createSession(); setShowSessions(false); }}
         onDeleteSession={deleteSession}
         onClose={() => setShowSessions(false)}
       />
@@ -482,219 +391,117 @@ export default function ChatScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0A0A0A" },
+  root: { flex: 1, backgroundColor: "#080808" },
+  flex1: { flex: 1 },
 
   topBar: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
+    top: 0, left: 0, right: 0,
+    zIndex: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 14,
-    paddingBottom: 8,
-    backgroundColor: "#0A0A0ACC",
+    paddingBottom: 10,
+    backgroundColor: "#080808E8",
   },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    flex: 1,
-  },
-  titleText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "700",
-    maxWidth: 160,
-  },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
+  titleText: { color: "#EEE", fontSize: 15, fontWeight: "700", maxWidth: 170 },
   chevronBtn: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#1E1E1E",
-    justifyContent: "center",
-    alignItems: "center",
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: "#191919",
+    justifyContent: "center", alignItems: "center",
   },
-  topRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
+  topRight: { flexDirection: "row", alignItems: "center", gap: 7 },
   providerBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    backgroundColor: "#111",
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 9, paddingVertical: 5,
+    borderRadius: 20, borderWidth: 1, backgroundColor: "#111",
   },
-  providerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  providerDot: { width: 6, height: 6, borderRadius: 3 },
+  providerText: { fontSize: 10, fontWeight: "700" },
+  iconBtn32: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: "#141414",
+    justifyContent: "center", alignItems: "center",
+    borderWidth: 1, borderColor: "#1E1E1E",
   },
-  providerText: {
-    fontSize: 11,
-    fontWeight: "700",
+  skillsBadge: {
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 10, backgroundColor: "#6C47FF20",
+    borderWidth: 1, borderColor: "#6C47FF40",
   },
-  clearBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#161616",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#222",
-  },
-  settingsBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#161616",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#222",
-  },
+  skillsBadgeText: { color: "#A78BFA", fontSize: 10, fontWeight: "700" },
 
   orbWrap: {
     position: "absolute",
-    left: -42,
-    top: "32%",
-    zIndex: 1,
-    opacity: 0.8,
+    left: -38, top: "35%",
+    zIndex: 0, opacity: 0.7,
   },
 
   listContent: {
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-    flexGrow: 1,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
-  skillsBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: "#6C47FF22",
-    borderWidth: 1,
-    borderColor: "#6C47FF44",
-  },
-  skillsBadgeText: {
-    color: "#A78BFA",
-    fontSize: 11,
-    fontWeight: "700",
-  },
+  msgWrap: { marginVertical: 1 },
 
-  recordingBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: "#1A0A0A",
-    borderTopWidth: 1,
-    borderTopColor: "#EF444420",
+  recBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 16, paddingVertical: 7,
+    backgroundColor: "#1A0808",
+    borderTopWidth: 1, borderTopColor: "#EF444418",
   },
-  recordingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#EF4444",
+  recDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#EF4444" },
+  recText: { color: "#EF4444", fontSize: 12, fontWeight: "600" },
+  transBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 16, paddingVertical: 7,
+    backgroundColor: "#1A0F08",
+    borderTopWidth: 1, borderTopColor: "#F9731618",
   },
-  recordingText: {
-    color: "#EF4444",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  transcribingBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: "#1A100A",
-    borderTopWidth: 1,
-    borderTopColor: "#F9731620",
-  },
-  transcribingText: {
-    color: "#F97316",
-    fontSize: 12,
-    fontWeight: "600",
-  },
+  transText: { color: "#F97316", fontSize: 12, fontWeight: "600" },
 
   inputBar: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    backgroundColor: "#0A0A0A",
-    borderTopWidth: 1,
-    borderTopColor: "#111",
-    gap: 6,
+    flexDirection: "row", alignItems: "flex-end",
+    paddingHorizontal: 10, paddingTop: 9,
+    backgroundColor: "#080808",
+    borderTopWidth: 1, borderTopColor: "#131313",
+    gap: 5,
   },
   agentBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#161616",
-    justifyContent: "center",
-    alignItems: "center",
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: "#141414",
+    justifyContent: "center", alignItems: "center",
   },
-  asterisk: {
-    color: "#F97316",
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 20,
-  },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: "center",
-    alignItems: "center",
+  asterisk: { color: "#F97316", fontSize: 15, fontWeight: "700", lineHeight: 19 },
+  inputIconBtn: {
+    width: 34, height: 34,
+    justifyContent: "center", alignItems: "center",
   },
   recActive: {
-    backgroundColor: "#1A0A0A",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#EF444440",
+    backgroundColor: "#1A0808", borderRadius: 17,
+    borderWidth: 1, borderColor: "#EF444430",
   },
   input: {
     flex: 1,
-    backgroundColor: "#141414",
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    color: "#FFF",
-    fontSize: 15,
-    maxHeight: 120,
-    minHeight: 38,
-    borderWidth: 1,
-    borderColor: "#1E1E1E",
+    backgroundColor: "#111",
+    borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 8,
+    color: "#EEE", fontSize: 15,
+    maxHeight: 130, minHeight: 36,
+    borderWidth: 1, borderColor: "#1C1C1C",
   },
   sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#222",
-    justifyContent: "center",
-    alignItems: "center",
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: "#1C1C1C",
+    justifyContent: "center", alignItems: "center",
   },
-  sendBtnActive: {
-    backgroundColor: "#6C47FF",
-  },
+  sendBtnActive: { backgroundColor: "#6C47FF" },
   stopBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#1A0A0A",
-    borderWidth: 1,
-    borderColor: "#EF444440",
-    justifyContent: "center",
-    alignItems: "center",
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: "#200808",
+    borderWidth: 1, borderColor: "#EF444430",
+    justifyContent: "center", alignItems: "center",
   },
+  safeBottom: { height: Platform.OS === "ios" ? 4 : Platform.OS === "web" ? 32 : 4 },
 });

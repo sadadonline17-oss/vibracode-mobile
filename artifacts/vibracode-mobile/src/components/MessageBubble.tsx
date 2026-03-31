@@ -2,8 +2,6 @@ import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Clipboard,
   Platform,
   ScrollView,
   StyleSheet,
@@ -17,9 +15,15 @@ interface Props {
   item: Message;
 }
 
+let _Clipboard: { setString: (s: string) => void } | null = null;
+try {
+  const rn = require("react-native");
+  if (rn.Clipboard?.setString) _Clipboard = rn.Clipboard;
+} catch {}
+
 function copyToClipboard(text: string) {
   try {
-    Clipboard.setString(text);
+    _Clipboard?.setString(text);
   } catch {}
 }
 
@@ -103,7 +107,6 @@ function parseLine(line: string, isUser: boolean, key: number): React.ReactEleme
 
 function parseInline(text: string, isUser: boolean): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  // Parse bold, italic, inline code
   const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
   let lastIndex = 0;
   let match;
