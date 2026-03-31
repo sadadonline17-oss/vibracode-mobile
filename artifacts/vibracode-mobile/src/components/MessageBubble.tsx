@@ -33,7 +33,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
 }
 
 function MarkdownText({ text, isUser }: { text: string; isUser: boolean }) {
-  const parts: JSX.Element[] = [];
+  const parts: React.ReactElement[] = [];
   const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
   let lastIndex = 0;
   let match;

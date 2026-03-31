@@ -58,6 +58,6 @@
   "dependencies": {
     "@shopify/flash-list": "^2.0.2",
     "expo-av": "^16.0.8",
-    "expo-build-properties": "^55.0.10"
+    "expo-build-properties": "~1.0.10"
   }
 }

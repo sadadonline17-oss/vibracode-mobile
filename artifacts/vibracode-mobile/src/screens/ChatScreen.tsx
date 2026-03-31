@@ -95,7 +95,7 @@ export default function ChatScreen() {
       );
       setRecording(rec);
       setIsRecording(true);
-      if (Platform.OS !== "web")
+      if ((Platform.OS as string) !== "web")
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (e) {
       Alert.alert("Error", "Could not start recording.");
