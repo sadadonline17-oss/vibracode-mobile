@@ -22,28 +22,106 @@ interface Props {
 
 type Section = "keys" | "agents" | "models";
 
-const PROVIDERS = [
+interface ProviderDef {
+  id: string;
+  label: string;
+  icon: "globe" | "star" | "cpu" | "code" | "zap" | "wind" | "box" | "activity";
+  color: string;
+  description: string;
+  placeholder: string;
+  docsUrl: string;
+  getValue: (s: ReturnType<typeof useSettings>) => string;
+  setValue: (s: ReturnType<typeof useSettings>, v: string) => void;
+}
+
+const PROVIDERS: ProviderDef[] = [
   {
     id: "openrouter",
     label: "OpenRouter",
-    icon: "globe" as const,
+    icon: "globe",
     color: "#6C47FF",
-    description: "يوفر وصولاً موحداً لجميع النماذج (Claude، Gemini، GPT، Qwen...)",
+    description: "وصول موحّد لجميع النماذج (Claude، Gemini، GPT، Qwen...)",
     placeholder: "sk-or-v1-...",
-    keyName: "openrouterKey" as const,
-    setKey: "setOpenrouterKey" as const,
-    docsUrl: "https://openrouter.ai/keys",
+    docsUrl: "openrouter.ai/keys",
+    getValue: (s) => s.openrouterKey,
+    setValue: (s, v) => s.setOpenrouterKey(v),
   },
   {
     id: "gemini",
     label: "Google Gemini",
-    icon: "star" as const,
+    icon: "star",
     color: "#3B82F6",
-    description: "مفتاح Gemini النative للوصول المباشر لنماذج Google",
+    description: "مفتاح Gemini Native للوصول المباشر لنماذج Google",
     placeholder: "AIzaSy...",
-    keyName: "geminiKey" as const,
-    setKey: "setGeminiKey" as const,
-    docsUrl: "https://aistudio.google.com/apikey",
+    docsUrl: "aistudio.google.com/apikey",
+    getValue: (s) => s.geminiKey,
+    setValue: (s, v) => s.setGeminiKey(v),
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    icon: "cpu",
+    color: "#A855F7",
+    description: "مفتاح Claude Native للوصول المباشر لـ Claude 3.5 Sonnet",
+    placeholder: "sk-ant-api...",
+    docsUrl: "console.anthropic.com/keys",
+    getValue: (s) => s.anthropicKey,
+    setValue: (s, v) => s.setAnthropicKey(v),
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    icon: "code",
+    color: "#10B981",
+    description: "مفتاح OpenAI للوصول لـ GPT-4o، o1، وسائر النماذج",
+    placeholder: "sk-...",
+    docsUrl: "platform.openai.com/api-keys",
+    getValue: (s) => s.openaiKey,
+    setValue: (s, v) => s.setOpenaiKey(v),
+  },
+  {
+    id: "mistral",
+    label: "Mistral AI",
+    icon: "wind",
+    color: "#EC4899",
+    description: "مفتاح Mistral Native للوصول لـ Mistral Large وسائر النماذج",
+    placeholder: "...",
+    docsUrl: "console.mistral.ai/api-keys",
+    getValue: (s) => s.mistralKey,
+    setValue: (s, v) => s.setMistralKey(v),
+  },
+  {
+    id: "groq",
+    label: "Groq",
+    icon: "zap",
+    color: "#F59E0B",
+    description: "استدلال فائق السرعة على Llama وMixtral وسائر النماذج",
+    placeholder: "gsk_...",
+    docsUrl: "console.groq.com/keys",
+    getValue: (s) => s.groqKey,
+    setValue: (s, v) => s.setGroqKey(v),
+  },
+  {
+    id: "cohere",
+    label: "Cohere",
+    icon: "activity",
+    color: "#22C55E",
+    description: "مفتاح Cohere لنماذج Command R وCommand R+",
+    placeholder: "...",
+    docsUrl: "dashboard.cohere.com/api-keys",
+    getValue: (s) => s.cohereKey,
+    setValue: (s, v) => s.setCohereKey(v),
+  },
+  {
+    id: "together",
+    label: "Together AI",
+    icon: "box",
+    color: "#06B6D4",
+    description: "منصة نماذج مفتوحة المصدر تتضمن Mixtral ونماذج أخرى",
+    placeholder: "...",
+    docsUrl: "api.together.xyz/settings/api-keys",
+    getValue: (s) => s.togetherKey,
+    setValue: (s, v) => s.setTogetherKey(v),
   },
 ];
 
@@ -95,11 +173,7 @@ export default function SettingsScreen({ visible, onClose }: Props) {
             <Feather name="x" size={20} color="#888" />
           </TouchableOpacity>
           <Text style={s.headerTitle}>الإعدادات</Text>
-          <TouchableOpacity
-            style={s.resetBtn}
-            onPress={handleResetKeys}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={s.resetBtn} onPress={handleResetKeys} activeOpacity={0.7}>
             <Feather name="refresh-cw" size={15} color="#555" />
           </TouchableOpacity>
         </View>
@@ -107,14 +181,8 @@ export default function SettingsScreen({ visible, onClose }: Props) {
         {/* Active state badge */}
         {activeAgent && (
           <View style={s.activeBanner}>
-            <View
-              style={[s.activeBannerIcon, { backgroundColor: activeAgent.color + "22" }]}
-            >
-              <Feather
-                name={activeAgent.icon as any}
-                size={16}
-                color={activeAgent.color}
-              />
+            <View style={[s.activeBannerIcon, { backgroundColor: activeAgent.color + "22" }]}>
+              <Feather name={activeAgent.icon as any} size={16} color={activeAgent.color} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.activeBannerLabel}>الأداة النشطة الآن</Text>
@@ -172,31 +240,17 @@ export default function SettingsScreen({ visible, onClose }: Props) {
                       key={agent.id}
                       style={[
                         s.agentCard,
-                        active && {
-                          borderColor: agent.color,
-                          backgroundColor: agent.color + "12",
-                        },
+                        active && { borderColor: agent.color, backgroundColor: agent.color + "12" },
                       ]}
                       onPress={() => chat.setSelectedAgent(agent.id as AgentType)}
                       activeOpacity={0.7}
                     >
                       <View style={s.agentCardTop}>
-                        <View
-                          style={[
-                            s.agentIconCircle,
-                            { backgroundColor: agent.color + "22" },
-                          ]}
-                        >
-                          <Feather
-                            name={agent.icon as any}
-                            size={18}
-                            color={agent.color}
-                          />
+                        <View style={[s.agentIconCircle, { backgroundColor: agent.color + "22" }]}>
+                          <Feather name={agent.icon as any} size={18} color={agent.color} />
                         </View>
                         {active && (
-                          <View
-                            style={[s.checkBadge, { backgroundColor: agent.color }]}
-                          >
+                          <View style={[s.checkBadge, { backgroundColor: agent.color }]}>
                             <Feather name="check" size={10} color="#FFF" />
                           </View>
                         )}
@@ -204,15 +258,8 @@ export default function SettingsScreen({ visible, onClose }: Props) {
                       <Text style={s.agentCardTitle} numberOfLines={1}>
                         {agent.label}
                       </Text>
-                      <View
-                        style={[
-                          s.agentBadge,
-                          { backgroundColor: agent.color + "18" },
-                        ]}
-                      >
-                        <Text
-                          style={[s.agentBadgeText, { color: agent.color }]}
-                        >
+                      <View style={[s.agentBadge, { backgroundColor: agent.color + "18" }]}>
+                        <Text style={[s.agentBadgeText, { color: agent.color }]}>
                           {agent.badge}
                         </Text>
                       </View>
@@ -245,12 +292,7 @@ export default function SettingsScreen({ visible, onClose }: Props) {
                     activeOpacity={0.7}
                   >
                     <View style={s.modelLeft}>
-                      <View
-                        style={[
-                          s.modelDot,
-                          active && { backgroundColor: "#6C47FF" },
-                        ]}
-                      />
+                      <View style={[s.modelDot, active && { backgroundColor: "#6C47FF" }]} />
                       <View style={{ flex: 1 }}>
                         <Text style={s.modelTitle}>{m.label}</Text>
                         <Text style={s.modelValue} numberOfLines={1}>
@@ -263,11 +305,7 @@ export default function SettingsScreen({ visible, onClose }: Props) {
                         <Text style={s.modelBadgeText}>{m.badge}</Text>
                       </View>
                       {active && (
-                        <Feather
-                          name="check-circle"
-                          size={16}
-                          color="#6C47FF"
-                        />
+                        <Feather name="check-circle" size={16} color="#6C47FF" />
                       )}
                     </View>
                   </TouchableOpacity>
@@ -281,29 +319,19 @@ export default function SettingsScreen({ visible, onClose }: Props) {
             <View>
               <Text style={s.sectionHint}>
                 أضف مفاتيح API الخاصة بك للحصول على حدود استخدام أعلى. إذا تركتها
-                فارغة، سيُستخدم المفتاح الافتراضي المشترك.
+                فارغة، سيُستخدم مفتاح OpenRouter الافتراضي المشترك.
               </Text>
 
               {PROVIDERS.map((provider) => {
-                const currentKey = settings[provider.keyName] as string;
+                const currentKey = provider.getValue(settings);
                 const isVisible = showKeys[provider.id] ?? false;
                 const hasKey = currentKey.trim().length > 0;
 
                 return (
                   <View key={provider.id} style={s.keyCard}>
-                    {/* Provider header */}
                     <View style={s.keyCardHeader}>
-                      <View
-                        style={[
-                          s.keyIcon,
-                          { backgroundColor: provider.color + "22" },
-                        ]}
-                      >
-                        <Feather
-                          name={provider.icon}
-                          size={16}
-                          color={provider.color}
-                        />
+                      <View style={[s.keyIcon, { backgroundColor: provider.color + "22" }]}>
+                        <Feather name={provider.icon} size={16} color={provider.color} />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={s.keyLabel}>{provider.label}</Text>
@@ -317,18 +345,11 @@ export default function SettingsScreen({ visible, onClose }: Props) {
                       )}
                     </View>
 
-                    {/* Input */}
                     <View style={s.keyInputRow}>
                       <TextInput
                         style={s.keyInput}
                         value={currentKey}
-                        onChangeText={(text) => {
-                          if (provider.id === "openrouter") {
-                            settings.setOpenrouterKey(text);
-                          } else {
-                            settings.setGeminiKey(text);
-                          }
-                        }}
+                        onChangeText={(text) => provider.setValue(settings, text)}
                         placeholder={provider.placeholder}
                         placeholderTextColor="#333"
                         secureTextEntry={!isVisible}
@@ -350,13 +371,7 @@ export default function SettingsScreen({ visible, onClose }: Props) {
                       {hasKey && (
                         <TouchableOpacity
                           style={s.clearBtn}
-                          onPress={() => {
-                            if (provider.id === "openrouter") {
-                              settings.setOpenrouterKey("");
-                            } else {
-                              settings.setGeminiKey("");
-                            }
-                          }}
+                          onPress={() => provider.setValue(settings, "")}
                           activeOpacity={0.7}
                         >
                           <Feather name="x" size={14} color="#555" />
@@ -364,7 +379,6 @@ export default function SettingsScreen({ visible, onClose }: Props) {
                       )}
                     </View>
 
-                    {/* Helper link */}
                     <Text style={s.keyHint}>
                       احصل على مفتاحك من{" "}
                       <Text style={[s.keyLink, { color: provider.color }]}>
@@ -375,7 +389,6 @@ export default function SettingsScreen({ visible, onClose }: Props) {
                 );
               })}
 
-              {/* Info card */}
               <View style={s.infoCard}>
                 <Feather name="shield" size={14} color="#3B82F6" />
                 <Text style={s.infoText}>
@@ -387,7 +400,6 @@ export default function SettingsScreen({ visible, onClose }: Props) {
           )}
         </ScrollView>
 
-        {/* Footer Save button (only for keys) */}
         {section === "keys" && (
           <View style={[s.footer, { paddingBottom: insets.bottom + 12 }]}>
             <TouchableOpacity style={s.saveBtn} onPress={onClose} activeOpacity={0.8}>
@@ -397,14 +409,9 @@ export default function SettingsScreen({ visible, onClose }: Props) {
           </View>
         )}
 
-        {/* Done button for agents/models */}
         {section !== "keys" && (
           <View style={[s.footer, { paddingBottom: insets.bottom + 12 }]}>
-            <TouchableOpacity
-              style={s.doneBtn}
-              onPress={onClose}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={s.doneBtn} onPress={onClose} activeOpacity={0.8}>
               <Text style={s.doneBtnText}>تم</Text>
             </TouchableOpacity>
           </View>
@@ -415,10 +422,7 @@ export default function SettingsScreen({ visible, onClose }: Props) {
 }
 
 const s = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#080808",
-  },
+  container: { flex: 1, backgroundColor: "#080808" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -436,11 +440,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  headerTitle: {
-    color: "#EEE",
-    fontSize: 17,
-    fontWeight: "700",
-  },
+  headerTitle: { color: "#EEE", fontSize: 17, fontWeight: "700" },
   resetBtn: {
     width: 36,
     height: 36,
@@ -467,16 +467,8 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  activeBannerLabel: {
-    color: "#444",
-    fontSize: 11,
-    fontWeight: "500",
-  },
-  activeBannerAgent: {
-    fontSize: 13,
-    fontWeight: "700",
-    marginTop: 2,
-  },
+  activeBannerLabel: { color: "#444", fontSize: 11, fontWeight: "500" },
+  activeBannerAgent: { fontSize: 13, fontWeight: "700", marginTop: 2 },
   modelPill: {
     backgroundColor: "#1A1A1A",
     paddingHorizontal: 10,
@@ -484,11 +476,7 @@ const s = StyleSheet.create({
     borderRadius: 10,
     maxWidth: 110,
   },
-  modelPillText: {
-    color: "#888",
-    fontSize: 10,
-    fontWeight: "600",
-  },
+  modelPillText: { color: "#888", fontSize: 10, fontWeight: "600" },
   tabs: {
     flexDirection: "row",
     marginHorizontal: 16,
@@ -508,21 +496,10 @@ const s = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 11,
   },
-  tabActive: {
-    backgroundColor: "#1E1E1E",
-  },
-  tabText: {
-    color: "#444",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  tabTextActive: {
-    color: "#EEE",
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 24,
-  },
+  tabActive: { backgroundColor: "#1E1E1E" },
+  tabText: { color: "#444", fontSize: 12, fontWeight: "600" },
+  tabTextActive: { color: "#EEE" },
+  scrollContent: { padding: 16, paddingBottom: 24 },
   sectionHint: {
     color: "#444",
     fontSize: 12,
@@ -532,11 +509,7 @@ const s = StyleSheet.create({
   },
 
   // Agent grid
-  agentGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
+  agentGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   agentCard: {
     width: "47%",
     backgroundColor: "#0F0F0F",
@@ -565,33 +538,11 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  agentCardTitle: {
-    color: "#EEE",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  agentBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  agentBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
-  agentDesc: {
-    color: "#444",
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  agentModel: {
-    color: "#2A2A2A",
-    fontSize: 9,
-    fontFamily: "monospace",
-    marginTop: 2,
-  },
+  agentCardTitle: { color: "#EEE", fontSize: 14, fontWeight: "700" },
+  agentBadge: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  agentBadgeText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.5 },
+  agentDesc: { color: "#444", fontSize: 11, lineHeight: 15 },
+  agentModel: { color: "#2A2A2A", fontSize: 9, fontFamily: "monospace", marginTop: 2 },
 
   // Model list
   modelRow: {
@@ -604,51 +555,14 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#161616",
   },
-  modelRowActive: {
-    backgroundColor: "#6C47FF0E",
-    borderColor: "#6C47FF30",
-  },
-  modelLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-  modelDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#252525",
-    flexShrink: 0,
-  },
-  modelTitle: {
-    color: "#DDD",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  modelValue: {
-    color: "#333",
-    fontSize: 10,
-    marginTop: 2,
-    fontFamily: "monospace",
-  },
-  modelRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginLeft: 8,
-  },
-  modelBadge: {
-    backgroundColor: "#181818",
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  modelBadgeText: {
-    color: "#444",
-    fontSize: 10,
-    fontWeight: "600",
-  },
+  modelRowActive: { backgroundColor: "#6C47FF0E", borderColor: "#6C47FF30" },
+  modelLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  modelDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#252525", flexShrink: 0 },
+  modelTitle: { color: "#DDD", fontSize: 14, fontWeight: "600" },
+  modelValue: { color: "#333", fontSize: 10, marginTop: 2, fontFamily: "monospace" },
+  modelRight: { flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 8 },
+  modelBadge: { backgroundColor: "#181818", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  modelBadgeText: { color: "#444", fontSize: 10, fontWeight: "600" },
 
   // API Key cards
   keyCard: {
@@ -660,11 +574,7 @@ const s = StyleSheet.create({
     borderColor: "#181818",
     gap: 12,
   },
-  keyCardHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
+  keyCardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   keyIcon: {
     width: 36,
     height: 36,
@@ -673,18 +583,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     flexShrink: 0,
   },
-  keyLabel: {
-    color: "#DDD",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  keyDesc: {
-    color: "#444",
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 3,
-    textAlign: "right",
-  },
+  keyLabel: { color: "#DDD", fontSize: 15, fontWeight: "700" },
+  keyDesc: { color: "#444", fontSize: 11, lineHeight: 16, marginTop: 3, textAlign: "right" },
   keyActiveBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -695,17 +595,8 @@ const s = StyleSheet.create({
     borderRadius: 8,
     flexShrink: 0,
   },
-  keyActiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#22C55E",
-  },
-  keyActiveText: {
-    color: "#22C55E",
-    fontSize: 10,
-    fontWeight: "700",
-  },
+  keyActiveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#22C55E" },
+  keyActiveText: { color: "#22C55E", fontSize: 10, fontWeight: "700" },
   keyInputRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -724,75 +615,55 @@ const s = StyleSheet.create({
     paddingVertical: 12,
     letterSpacing: 0.5,
   },
-  eyeBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
+  eyeBtn: { paddingHorizontal: 12, paddingVertical: 12 },
   clearBtn: {
     paddingHorizontal: 10,
     paddingVertical: 12,
     borderLeftWidth: 1,
     borderLeftColor: "#1A1A1A",
   },
-  keyHint: {
-    color: "#333",
-    fontSize: 11,
-    textAlign: "right",
-  },
-  keyLink: {
-    fontWeight: "600",
-  },
+  keyHint: { color: "#2A2A2A", fontSize: 11 },
+  keyLink: { fontWeight: "600" },
+
+  // Info card
   infoCard: {
     flexDirection: "row",
-    alignItems: "flex-start",
     gap: 10,
-    backgroundColor: "#0A1A2E",
     padding: 14,
+    backgroundColor: "#0A1628",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#0D2A4A",
-    marginTop: 4,
+    borderColor: "#0F2044",
+    marginTop: 8,
+    alignItems: "flex-start",
   },
-  infoText: {
-    color: "#3B82F6",
-    fontSize: 12,
-    lineHeight: 17,
-    flex: 1,
-    textAlign: "right",
-  },
+  infoText: { color: "#3B82F6", fontSize: 12, lineHeight: 18, flex: 1, textAlign: "right" },
 
   // Footer
   footer: {
     paddingHorizontal: 16,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#141414",
-    backgroundColor: "#080808",
+    borderTopColor: "#111",
   },
   saveBtn: {
+    backgroundColor: "#6C47FF",
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#6C47FF",
-    paddingVertical: 15,
-    borderRadius: 16,
+    paddingVertical: 14,
   },
-  saveBtnText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  saveBtnText: { color: "#FFF", fontSize: 15, fontWeight: "700" },
   doneBtn: {
+    backgroundColor: "#141414",
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#1A1A1A",
-    paddingVertical: 15,
-    borderRadius: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: "#1E1E1E",
   },
-  doneBtnText: {
-    color: "#EEE",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  doneBtnText: { color: "#AAA", fontSize: 15, fontWeight: "600" },
 });

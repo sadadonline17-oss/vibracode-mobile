@@ -11,24 +11,44 @@ import { CONFIG } from "../config";
 interface SettingsState {
   openrouterKey: string;
   geminiKey: string;
+  anthropicKey: string;
+  openaiKey: string;
+  mistralKey: string;
+  groqKey: string;
+  cohereKey: string;
+  togetherKey: string;
 }
 
-interface SettingsContextValue {
-  openrouterKey: string;
-  geminiKey: string;
+interface SettingsContextValue extends SettingsState {
   setOpenrouterKey: (key: string) => void;
   setGeminiKey: (key: string) => void;
+  setAnthropicKey: (key: string) => void;
+  setOpenaiKey: (key: string) => void;
+  setMistralKey: (key: string) => void;
+  setGroqKey: (key: string) => void;
+  setCohereKey: (key: string) => void;
+  setTogetherKey: (key: string) => void;
   resetKeys: () => void;
   getEffectiveOpenrouterKey: () => string;
   getEffectiveGeminiKey: () => string;
 }
 
+const DEFAULTS: SettingsState = {
+  openrouterKey: "",
+  geminiKey: "",
+  anthropicKey: "",
+  openaiKey: "",
+  mistralKey: "",
+  groqKey: "",
+  cohereKey: "",
+  togetherKey: "",
+};
+
 const SettingsContext = createContext<SettingsContextValue | null>(null);
-const SETTINGS_KEY = "vibracode_settings_v1";
+const SETTINGS_KEY = "vibracode_settings_v2";
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [openrouterKey, setOpenrouterKeyState] = useState("");
-  const [geminiKey, setGeminiKeyState] = useState("");
+  const [state, setState] = useState<SettingsState>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -37,8 +57,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (raw) {
           try {
             const saved: Partial<SettingsState> = JSON.parse(raw);
-            if (saved.openrouterKey) setOpenrouterKeyState(saved.openrouterKey);
-            if (saved.geminiKey) setGeminiKeyState(saved.geminiKey);
+            setState((prev) => ({ ...prev, ...saved }));
           } catch {}
         }
       })
@@ -46,51 +65,33 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoaded(true));
   }, []);
 
-  const save = useCallback(
-    (patch: Partial<SettingsState>) => {
-      const next: SettingsState = {
-        openrouterKey,
-        geminiKey,
-        ...patch,
-      };
-      AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next)).catch(() => {});
-    },
-    [openrouterKey, geminiKey]
-  );
-
-  const setOpenrouterKey = useCallback(
-    (key: string) => {
-      setOpenrouterKeyState(key);
-      save({ openrouterKey: key });
-    },
-    [save]
-  );
-
-  const setGeminiKey = useCallback(
-    (key: string) => {
-      setGeminiKeyState(key);
-      save({ geminiKey: key });
-    },
-    [save]
-  );
-
-  const resetKeys = useCallback(() => {
-    setOpenrouterKeyState("");
-    setGeminiKeyState("");
-    AsyncStorage.setItem(
-      SETTINGS_KEY,
-      JSON.stringify({ openrouterKey: "", geminiKey: "" })
-    ).catch(() => {});
+  const persist = useCallback((next: SettingsState) => {
+    AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next)).catch(() => {});
   }, []);
 
+  function makeSetter<K extends keyof SettingsState>(key: K) {
+    return (value: string) => {
+      setState((prev) => {
+        const next = { ...prev, [key]: value };
+        persist(next);
+        return next;
+      });
+    };
+  }
+
+  const resetKeys = useCallback(() => {
+    setState(DEFAULTS);
+    persist(DEFAULTS);
+  }, [persist]);
+
   const getEffectiveOpenrouterKey = useCallback(
-    () => openrouterKey.trim() || CONFIG.OPENROUTER_API_KEY,
-    [openrouterKey]
+    () => state.openrouterKey.trim() || CONFIG.OPENROUTER_API_KEY,
+    [state.openrouterKey]
   );
 
   const getEffectiveGeminiKey = useCallback(
-    () => geminiKey.trim() || CONFIG.GEMINI_API_KEY,
-    [geminiKey]
+    () => state.geminiKey.trim() || CONFIG.GEMINI_API_KEY,
+    [state.geminiKey]
   );
 
   if (!loaded) return null;
@@ -98,10 +99,15 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   return (
     <SettingsContext.Provider
       value={{
-        openrouterKey,
-        geminiKey,
-        setOpenrouterKey,
-        setGeminiKey,
+        ...state,
+        setOpenrouterKey: makeSetter("openrouterKey"),
+        setGeminiKey: makeSetter("geminiKey"),
+        setAnthropicKey: makeSetter("anthropicKey"),
+        setOpenaiKey: makeSetter("openaiKey"),
+        setMistralKey: makeSetter("mistralKey"),
+        setGroqKey: makeSetter("groqKey"),
+        setCohereKey: makeSetter("cohereKey"),
+        setTogetherKey: makeSetter("togetherKey"),
         resetKeys,
         getEffectiveOpenrouterKey,
         getEffectiveGeminiKey,

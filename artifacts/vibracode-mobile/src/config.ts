@@ -10,14 +10,15 @@ export type AgentType =
   | "mistral"
   | "phi"
   | "grok"
-  | "nemotron";
+  | "nemotron"
+  | "openclaw";
 
 export type ProviderType = "openrouter" | "e2b";
 
-// Agents that run inside a real E2B sandbox (code execution)
 export const E2B_AGENT_MAP: Partial<Record<AgentType, string>> = {
   claude: "claude-code",
   codex: "codex",
+  openclaw: "openclaw",
 };
 
 export interface Agent {
@@ -33,7 +34,6 @@ export interface Agent {
 }
 
 export const CONFIG = {
-  // Keys used only as user-supplied overrides; real keys live on the server
   OPENROUTER_API_KEY:
     process.env.EXPO_PUBLIC_OPENROUTER_KEY ??
     "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",
@@ -46,7 +46,6 @@ export const CONFIG = {
     process.env.EXPO_PUBLIC_CONVEX_URL ??
     "https://astute-ladybug-398.convex.cloud",
 
-  // API server base URL (all AI calls are proxied through here)
   BACKEND_URL:
     process.env.EXPO_PUBLIC_BACKEND_URL ??
     (process.env.EXPO_PUBLIC_DOMAIN
@@ -57,7 +56,21 @@ export const CONFIG = {
     process.env.EXPO_PUBLIC_E2B_KEY ??
     "e2b_51e98476ce3cdfff4768678430d5527df28b169a",
 
-  // ─── 12 AI Agents ──────────────────────────────────────────────────────────
+  GEMINI_API_KEY: process.env.EXPO_PUBLIC_GEMINI_KEY ?? "",
+
+  ANTHROPIC_API_KEY: process.env.EXPO_PUBLIC_ANTHROPIC_KEY ?? "",
+
+  OPENAI_API_KEY: process.env.EXPO_PUBLIC_OPENAI_KEY ?? "",
+
+  MISTRAL_API_KEY: process.env.EXPO_PUBLIC_MISTRAL_KEY ?? "",
+
+  GROQ_API_KEY: process.env.EXPO_PUBLIC_GROQ_KEY ?? "",
+
+  COHERE_API_KEY: process.env.EXPO_PUBLIC_COHERE_KEY ?? "",
+
+  TOGETHER_API_KEY: process.env.EXPO_PUBLIC_TOGETHER_KEY ?? "",
+
+  // ─── 13 AI Agents ──────────────────────────────────────────────────────────
   AGENTS: [
     {
       id: "claude" as AgentType,
@@ -80,6 +93,17 @@ export const CONFIG = {
       description: "Real sandbox · OpenAI Codex",
       provider: "e2b" as ProviderType,
       badge: "E2B · OpenAI",
+    },
+    {
+      id: "openclaw" as AgentType,
+      label: "OpenClaw",
+      icon: "git-branch",
+      color: "#F43F5E",
+      model: "openrouter/auto",
+      fallback: "qwen/qwen-2.5-coder-32b:free",
+      description: "Real sandbox · Multi-agent",
+      provider: "e2b" as ProviderType,
+      badge: "E2B · OpenRouter",
     },
     {
       id: "gemini" as AgentType,
@@ -196,28 +220,58 @@ export const CONFIG = {
   DEFAULT_AGENT: "gemini" as AgentType,
 
   FREE_MODELS: [
+    // ── Google ──────────────────────────────────────────────────────────────
     { label: "Gemini 2.0 Flash Exp", value: "google/gemini-2.0-flash-exp:free", badge: "Google" },
     { label: "Gemini Flash 1.5", value: "google/gemini-flash-1.5:free", badge: "Google" },
+    { label: "Gemini 2.5 Flash Preview", value: "google/gemini-2.5-flash-preview:free", badge: "Google" },
+    // ── Anthropic ───────────────────────────────────────────────────────────
     { label: "Claude 3.5 Sonnet", value: "anthropic/claude-3.5-sonnet:free", badge: "Anthropic" },
     { label: "Claude 3 Haiku", value: "anthropic/claude-3-haiku:free", badge: "Anthropic" },
+    { label: "Claude 3.5 Haiku", value: "anthropic/claude-3.5-haiku:free", badge: "Anthropic" },
+    // ── OpenAI ──────────────────────────────────────────────────────────────
+    { label: "GPT-4o Mini", value: "openai/gpt-4o-mini:free", badge: "OpenAI" },
+    { label: "GPT-4o", value: "openai/gpt-4o:free", badge: "OpenAI" },
+    { label: "o1 Mini", value: "openai/o1-mini:free", badge: "OpenAI" },
+    // ── Alibaba ─────────────────────────────────────────────────────────────
     { label: "Qwen 2.5 Coder 32B", value: "qwen/qwen-2.5-coder-32b:free", badge: "Alibaba" },
     { label: "Qwen 2.5 72B", value: "qwen/qwen-2.5-72b-instruct:free", badge: "Alibaba" },
+    { label: "Qwen 3 235B A22B", value: "qwen/qwen3-235b-a22b:free", badge: "Alibaba" },
+    { label: "Qwen 3 30B A3B", value: "qwen/qwen3-30b-a3b:free", badge: "Alibaba" },
+    // ── DeepSeek ────────────────────────────────────────────────────────────
     { label: "DeepSeek R1", value: "deepseek/deepseek-r1:free", badge: "DeepSeek" },
     { label: "DeepSeek R1 Distill 32B", value: "deepseek/deepseek-r1-distill-qwen-32b:free", badge: "DeepSeek" },
     { label: "DeepSeek Coder", value: "deepseek/deepseek-coder:free", badge: "DeepSeek" },
+    { label: "DeepSeek V3", value: "deepseek/deepseek-chat:free", badge: "DeepSeek" },
+    // ── Moonshot ────────────────────────────────────────────────────────────
     { label: "Kimi K2", value: "moonshotai/kimi-k2:free", badge: "Moonshot" },
+    // ── Meta ────────────────────────────────────────────────────────────────
     { label: "Llama 3.3 70B", value: "meta-llama/llama-3.3-70b-instruct:free", badge: "Meta" },
     { label: "Llama 3.1 70B", value: "meta-llama/llama-3.1-70b-instruct:free", badge: "Meta" },
     { label: "Llama 3.1 8B", value: "meta-llama/llama-3.1-8b-instruct:free", badge: "Meta" },
+    { label: "Llama 4 Scout", value: "meta-llama/llama-4-scout:free", badge: "Meta" },
+    // ── NousResearch ────────────────────────────────────────────────────────
     { label: "Hermes 3 70B", value: "nousresearch/hermes-3-llama-3.1-70b:free", badge: "NousResearch" },
+    // ── Mistral ─────────────────────────────────────────────────────────────
     { label: "Mistral Nemo", value: "mistralai/mistral-nemo:free", badge: "Mistral" },
     { label: "Mistral 7B", value: "mistralai/mistral-7b-instruct:free", badge: "Mistral" },
+    { label: "Mistral Small", value: "mistralai/mistral-small:free", badge: "Mistral" },
+    // ── Microsoft ───────────────────────────────────────────────────────────
     { label: "Phi-3 Medium", value: "microsoft/phi-3-medium-128k-instruct:free", badge: "Microsoft" },
     { label: "Phi-3 Mini", value: "microsoft/phi-3-mini-128k-instruct:free", badge: "Microsoft" },
-    { label: "GPT-4o Mini", value: "openai/gpt-4o-mini:free", badge: "OpenAI" },
+    { label: "Phi-4", value: "microsoft/phi-4:free", badge: "Microsoft" },
+    // ── xAI ─────────────────────────────────────────────────────────────────
     { label: "Grok 3 Mini", value: "x-ai/grok-3-mini-beta:free", badge: "xAI" },
+    { label: "Grok 2", value: "x-ai/grok-2:free", badge: "xAI" },
+    // ── NVIDIA ──────────────────────────────────────────────────────────────
     { label: "Nemotron 70B", value: "nvidia/llama-3.1-nemotron-70b-instruct:free", badge: "NVIDIA" },
+    // ── THUDM ───────────────────────────────────────────────────────────────
     { label: "GLM-4 9B", value: "thudm/glm-4-9b:free", badge: "THUDM" },
+    { label: "GLM Z1 32B", value: "thudm/glm-z1-32b:free", badge: "THUDM" },
+    // ── Cohere ──────────────────────────────────────────────────────────────
+    { label: "Command R+", value: "cohere/command-r-plus:free", badge: "Cohere" },
+    { label: "Command R", value: "cohere/command-r:free", badge: "Cohere" },
+    // ── Together ────────────────────────────────────────────────────────────
+    { label: "Mixtral 8x7B", value: "mistralai/mixtral-8x7b-instruct:free", badge: "Together" },
   ],
 
   DEFAULT_MODEL: "google/gemini-2.0-flash-exp:free",
