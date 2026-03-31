@@ -20,10 +20,10 @@ export type AgentType =
 
 export type ProviderType = "openrouter" | "e2b" | "groq";
 
+// Only agents with verified E2B templates
 export const E2B_AGENT_MAP: Partial<Record<AgentType, string>> = {
   claude: "claude-code",
   codex: "codex",
-  openclaw: "openclaw",
 };
 
 export interface Agent {

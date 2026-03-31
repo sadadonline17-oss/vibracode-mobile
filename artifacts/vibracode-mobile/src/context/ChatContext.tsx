@@ -34,6 +34,7 @@ export interface Message {
   expanded?: boolean;
   streaming?: boolean;
   agentId?: AgentType;
+  hasImage?: boolean;
 }
 
 export interface Session {
@@ -57,6 +58,7 @@ interface ChatContextValue {
   createSession: (name?: string) => string;
   selectSession: (id: string) => void;
   sendMessage: (content: string) => Promise<void>;
+  sendVisionMessage: (text: string, imageBase64: string, imageMimeType: string) => Promise<void>;
   clearHistory: () => void;
   deleteSession: (id: string) => void;
   toggleExpanded: (msgId: string) => void;
@@ -78,15 +80,30 @@ function createWelcomeMessage(): Message {
     type: "message",
     role: "assistant",
     content:
-      "What do you want to build today? Describe your app and I'll build it for you.\n\nYou can also switch AI provider using the ✦ button below.",
+      "ما الذي تريد بناءه اليوم؟ صف تطبيقك وسأقوم ببنائه لك.\n\nيمكنك أيضاً تغيير نموذج AI باستخدام زر ✦ أدناه، أو إرسال صورة لوصف التطبيق.",
     timestamp: Date.now(),
   };
 }
 
+// Vision-capable models to use when an image is attached
+const VISION_MODELS = [
+  "google/gemini-2.0-flash-exp:free",
+  "anthropic/claude-3.5-sonnet",
+  "openai/gpt-4o",
+  "qwen/qwen2-vl-7b-instruct:free",
+];
+
+type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+type ChatMessage =
+  | { role: string; content: string }
+  | { role: string; content: ContentPart[] };
 
 async function callOpenRouter(
   model: string,
-  messages: { role: string; content: string }[],
+  messages: ChatMessage[],
   apiKey: string,
   signal: AbortSignal,
   onChunk: (text: string) => void
@@ -150,7 +167,7 @@ async function callOpenRouter(
 async function callWithFallback(
   primaryModel: string,
   fallbackModel: string,
-  messages: { role: string; content: string }[],
+  messages: ChatMessage[],
   apiKey: string,
   signal: AbortSignal,
   onChunk: (text: string) => void
@@ -160,7 +177,7 @@ async function callWithFallback(
   } catch (err: any) {
     if (err?.name === "AbortError") throw err;
     if (fallbackModel && fallbackModel !== primaryModel) {
-      onChunk("\n\n*[Switched to fallback model]*\n\n");
+      onChunk("\n\n*[تم التبديل إلى النموذج الاحتياطي]*\n\n");
       await callOpenRouter(fallbackModel, messages, apiKey, signal, onChunk);
     } else {
       throw err;
@@ -220,14 +237,14 @@ async function callE2BStream(
         } catch {
           onEvent(currentEvent, raw);
         }
-        currentEvent = "message"; // reset after consuming
+        currentEvent = "message";
       }
     }
   }
 }
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const { getEffectiveOpenrouterKey } = useSettings();
+  const { getEffectiveOpenrouterKey, groqKey } = useSettings();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<AgentType>(CONFIG.DEFAULT_AGENT);
@@ -238,7 +255,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const addActiveSkill = useCallback((skillPrompt: string, skillTitle: string) => {
     const entry = `### ${skillTitle}\n${skillPrompt}`;
-    setActiveSkills((prev) => prev.some((s) => s.startsWith(`### ${skillTitle}`)) ? prev : [...prev, entry]);
+    setActiveSkills((prev) =>
+      prev.some((s) => s.startsWith(`### ${skillTitle}`)) ? prev : [...prev, entry]
+    );
   }, []);
 
   const removeActiveSkill = useCallback((skillTitle: string) => {
@@ -261,7 +280,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const id = generateId();
         const init: Session = {
           id,
-          name: "New Project",
+          name: "مشروع جديد",
           messages: [createWelcomeMessage()],
           createdAt: Date.now(),
         };
@@ -283,7 +302,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const id = generateId();
     const s: Session = {
       id,
-      name: name ?? "New Project",
+      name: name ?? "مشروع جديد",
       messages: [createWelcomeMessage()],
       createdAt: Date.now(),
     };
@@ -334,11 +353,165 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setIsSending(false);
   }, []);
 
-  const patchSession = useCallback(
-    (sid: string, fn: (s: Session) => Session) => {
-      setSessions((prev) => prev.map((s) => (s.id === sid ? fn(s) : s)));
+  // ── Core send logic (shared between text and vision messages) ─────────
+  const _doSend = useCallback(
+    async (
+      userContent: string,
+      chatMessages: ChatMessage[],
+      sid: string,
+      streamId: string,
+      controller: AbortController,
+      hasImage?: boolean
+    ) => {
+      const agent = CONFIG.AGENTS.find((a) => a.id === selectedAgent);
+      const e2bAgentName = E2B_AGENT_MAP[selectedAgent];
+      const backendUrl = CONFIG.BACKEND_URL;
+
+      // ── E2B path ──────────────────────────────────────────────────────
+      if (e2bAgentName && backendUrl && !hasImage) {
+        let accumulated = "";
+
+        const skillsText = (activeSkills ?? []).join("\n\n");
+        const e2bPrompt = skillsText
+          ? `## Active Skills & Context\n${skillsText}\n\n## Task\n${userContent}`
+          : userContent;
+
+        const addMsg = (type: MessageType, msgContent: string) => {
+          const newMsg: Message = {
+            id: generateId(),
+            type,
+            role: "assistant",
+            content: msgContent,
+            timestamp: Date.now(),
+          };
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sid ? { ...s, messages: [...s.messages, newMsg] } : s
+            )
+          );
+        };
+
+        await callE2BStream(
+          backendUrl,
+          e2bPrompt,
+          e2bAgentName,
+          sid,
+          getEffectiveOpenrouterKey(),
+          controller.signal,
+          (evType, evContent) => {
+            if (evType === "message") {
+              accumulated += evContent;
+              setSessions((prev) =>
+                prev.map((s) =>
+                  s.id === sid
+                    ? {
+                        ...s,
+                        messages: s.messages.map((m) =>
+                          m.id === streamId ? { ...m, content: accumulated } : m
+                        ),
+                      }
+                    : s
+                )
+              );
+            } else if (evType === "read") {
+              addMsg("read", evContent);
+            } else if (evType === "edit") {
+              addMsg("edit", evContent);
+            } else if (evType === "bash") {
+              addMsg("bash", evContent);
+            } else if (evType === "status") {
+              setSessions((prev) =>
+                prev.map((s) =>
+                  s.id === sid
+                    ? {
+                        ...s,
+                        messages: s.messages.map((m) =>
+                          m.id === streamId && !accumulated
+                            ? { ...m, content: `⚙ ${evContent}` }
+                            : m
+                        ),
+                      }
+                    : s
+                )
+              );
+            } else if (evType === "tasks") {
+              try {
+                const taskData = JSON.parse(evContent);
+                const taskItems = Array.isArray(taskData)
+                  ? taskData.map((t: any) => ({
+                      text: t.content ?? t.task ?? String(t),
+                      status: "done" as const,
+                    }))
+                  : [];
+                const tasksMsg: Message = {
+                  id: generateId(),
+                  type: "tasks",
+                  role: "assistant",
+                  content: "",
+                  timestamp: Date.now(),
+                  tasks: taskItems,
+                };
+                setSessions((prev) =>
+                  prev.map((s) =>
+                    s.id === sid
+                      ? { ...s, messages: [...s.messages, tasksMsg] }
+                      : s
+                  )
+                );
+              } catch {}
+            } else if (evType === "error") {
+              accumulated = `⚠️ ${evContent}`;
+              setSessions((prev) =>
+                prev.map((s) =>
+                  s.id === sid
+                    ? {
+                        ...s,
+                        messages: s.messages.map((m) =>
+                          m.id === streamId ? { ...m, content: accumulated } : m
+                        ),
+                      }
+                    : s
+                )
+              );
+            }
+          }
+        );
+      } else {
+        // ── OpenRouter path ─────────────────────────────────────────────
+        const model = hasImage
+          ? VISION_MODELS[0]
+          : (agent?.model ?? selectedModel);
+        const fallback = hasImage
+          ? VISION_MODELS[1]
+          : (agent?.fallback ?? selectedModel);
+
+        let accumulated = "";
+
+        await callWithFallback(
+          model,
+          fallback,
+          chatMessages,
+          getEffectiveOpenrouterKey(),
+          controller.signal,
+          (chunk) => {
+            accumulated += chunk;
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sid
+                  ? {
+                      ...s,
+                      messages: s.messages.map((m) =>
+                        m.id === streamId ? { ...m, content: accumulated } : m
+                      ),
+                    }
+                  : s
+              )
+            );
+          }
+        );
+      }
     },
-    []
+    [selectedAgent, selectedModel, sessions, activeSkills, getEffectiveOpenrouterKey]
   );
 
   const sendMessage = useCallback(
@@ -366,9 +539,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           if (s.id !== sid) return s;
           return {
             ...s,
-            name: s.messages.filter((m) => m.type === "message" && m.role === "user").length === 0
-              ? content.slice(0, 40)
-              : s.name,
+            name:
+              s.messages.filter((m) => m.type === "message" && m.role === "user").length === 0
+                ? content.slice(0, 40)
+                : s.name,
             messages: [...s.messages, userMsg],
           };
         })
@@ -393,128 +567,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       );
 
       try {
-        const e2bAgentName = E2B_AGENT_MAP[selectedAgent];
-        const backendUrl = CONFIG.BACKEND_URL;
-
-        // ── E2B path: claude-code or codex run in a real sandbox ──────────
-        if (e2bAgentName && backendUrl) {
-          let accumulated = "";
-
-          // Inject active skills into E2B prompt
-          const skillsText = (activeSkills ?? []).join("\n\n");
-          const e2bPrompt = skillsText
-            ? `## Active Skills & Context\n${skillsText}\n\n## Task\n${content}`
-            : content;
-
-          const addMsg = (type: MessageType, msgContent: string) => {
-            const newMsg: Message = {
-              id: generateId(),
-              type,
-              role: "assistant",
-              content: msgContent,
-              timestamp: Date.now(),
-            };
-            setSessions((prev) =>
-              prev.map((s) =>
-                s.id === sid
-                  ? { ...s, messages: [...s.messages, newMsg] }
-                  : s
-              )
-            );
-          };
-
-          await callE2BStream(
-            backendUrl,
-            e2bPrompt,
-            e2bAgentName,
-            sid,
-            getEffectiveOpenrouterKey(),
-            controller.signal,
-            (evType, evContent) => {
-              if (evType === "message") {
-                accumulated += evContent;
-                setSessions((prev) =>
-                  prev.map((s) =>
-                    s.id === sid
-                      ? {
-                          ...s,
-                          messages: s.messages.map((m) =>
-                            m.id === streamId
-                              ? { ...m, content: accumulated }
-                              : m
-                          ),
-                        }
-                      : s
-                  )
-                );
-              } else if (evType === "read") {
-                addMsg("read", evContent);
-              } else if (evType === "edit") {
-                addMsg("edit", evContent);
-              } else if (evType === "bash") {
-                addMsg("bash", evContent);
-              } else if (evType === "status") {
-                // update streaming msg status label
-                setSessions((prev) =>
-                  prev.map((s) =>
-                    s.id === sid
-                      ? {
-                          ...s,
-                          messages: s.messages.map((m) =>
-                            m.id === streamId && !accumulated
-                              ? { ...m, content: `⚙ ${evContent}` }
-                              : m
-                          ),
-                        }
-                      : s
-                  )
-                );
-              } else if (evType === "tasks") {
-                try {
-                  const taskData = JSON.parse(evContent);
-                  const taskItems = Array.isArray(taskData)
-                    ? taskData.map((t: any) => ({
-                        text: t.content ?? t.task ?? String(t),
-                        status: "done" as const,
-                      }))
-                    : [];
-                  const tasksMsg: Message = {
-                    id: generateId(),
-                    type: "tasks",
-                    role: "assistant",
-                    content: "",
-                    timestamp: Date.now(),
-                    tasks: taskItems,
-                  };
-                  setSessions((prev) =>
-                    prev.map((s) =>
-                      s.id === sid
-                        ? { ...s, messages: [...s.messages, tasksMsg] }
-                        : s
-                    )
-                  );
-                } catch {}
-              } else if (evType === "error") {
-                accumulated = `⚠️ ${evContent}`;
-                setSessions((prev) =>
-                  prev.map((s) =>
-                    s.id === sid
-                      ? {
-                          ...s,
-                          messages: s.messages.map((m) =>
-                            m.id === streamId ? { ...m, content: accumulated } : m
-                          ),
-                        }
-                      : s
-                  )
-                );
-              }
-            }
-          );
-        } else {
-        // ── OpenRouter path: all other agents ────────────────────────────
-        const model = agent?.model ?? selectedModel;
-        const fallback = agent?.fallback ?? selectedModel;
+        const agentSystemPrompt = agent?.systemPrompt ?? CONFIG.SYSTEM_PROMPT;
+        const activeSkillsText = (activeSkills ?? []).join("\n\n");
+        const systemContent = activeSkillsText
+          ? `${agentSystemPrompt}\n\n## Active Skills & Rules\n${activeSkillsText}`
+          : agentSystemPrompt;
 
         const session = sessions.find((s) => s.id === sid);
         const history =
@@ -523,46 +580,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             .slice(-20)
             .map((m) => ({ role: m.role as string, content: m.content })) ?? [];
 
-        // Use per-agent system prompt if available
-        const agentSystemPrompt = agent?.systemPrompt ?? CONFIG.SYSTEM_PROMPT;
-
-        // Inject active skills context if any
-        const activeSkillsText = (activeSkills ?? []).join("\n\n");
-        const systemContent = activeSkillsText
-          ? `${agentSystemPrompt}\n\n## Active Skills & Rules\n${activeSkillsText}`
-          : agentSystemPrompt;
-
-        const chatMessages = [
+        const chatMessages: ChatMessage[] = [
           { role: "system", content: systemContent },
           ...history,
           { role: "user", content },
         ];
 
-        let accumulated = "";
-
-        await callWithFallback(
-          model,
-          fallback,
-          chatMessages,
-          getEffectiveOpenrouterKey(),
-          controller.signal,
-          (chunk) => {
-            accumulated += chunk;
-            setSessions((prev) =>
-              prev.map((s) =>
-                s.id === sid
-                  ? {
-                      ...s,
-                      messages: s.messages.map((m) =>
-                        m.id === streamId ? { ...m, content: accumulated } : m
-                      ),
-                    }
-                  : s
-              )
-            );
-          }
-        );
-        } // end else OpenRouter
+        await _doSend(content, chatMessages, sid, streamId, controller);
 
         setSessions((prev) =>
           prev.map((s) =>
@@ -585,7 +609,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     ...s,
                     messages: s.messages.map((m) =>
                       m.id === streamId
-                        ? { ...m, content: m.content || "⏹ Message cancelled.", streaming: false }
+                        ? { ...m, content: m.content || "⏹ تم الإلغاء.", streaming: false }
                         : m
                     ),
                   }
@@ -601,9 +625,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
         let userErrMsg = `⚠️ ${errMsg}`;
         if (isQuota) {
-          userErrMsg = "⚠️ Rate limit reached. Switching to another model — please try again.";
+          userErrMsg = "⚠️ تم تجاوز حد الطلبات. جرب مرة أخرى بعد قليل.";
         } else if (isModelUnavail) {
-          userErrMsg = "⚠️ This model isn't available. Try selecting a different AI provider.";
+          userErrMsg = "⚠️ هذا النموذج غير متاح. اختر نموذجاً آخر.";
         }
 
         setSessions((prev) =>
@@ -624,7 +648,135 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setIsSending(false);
       }
     },
-    [currentSessionId, selectedAgent, selectedModel, sessions, isSending, patchSession, activeSkills]
+    [currentSessionId, selectedAgent, selectedModel, sessions, isSending, activeSkills, _doSend]
+  );
+
+  // ── Vision message: send image + text to a vision-capable model ────────
+  const sendVisionMessage = useCallback(
+    async (text: string, imageBase64: string, imageMimeType: string) => {
+      if (!currentSessionId || isSending) return;
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setIsSending(true);
+
+      const displayText = text || "ما الذي يمكن بناؤه استناداً لهذه الصورة؟";
+
+      const userMsg: Message = {
+        id: generateId(),
+        type: "message",
+        role: "user",
+        content: `🖼 ${displayText}`,
+        timestamp: Date.now(),
+        hasImage: true,
+      };
+
+      const sid = currentSessionId;
+
+      setSessions((prev) =>
+        prev.map((s) => {
+          if (s.id !== sid) return s;
+          return {
+            ...s,
+            name:
+              s.messages.filter((m) => m.type === "message" && m.role === "user").length === 0
+                ? displayText.slice(0, 40)
+                : s.name,
+            messages: [...s.messages, userMsg],
+          };
+        })
+      );
+
+      const streamId = generateId();
+      const streamMsg: Message = {
+        id: streamId,
+        type: "message",
+        role: "assistant",
+        content: "",
+        timestamp: Date.now(),
+        streaming: true,
+        agentId: selectedAgent,
+      };
+
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === sid ? { ...s, messages: [...s.messages, streamMsg] } : s
+        )
+      );
+
+      try {
+        const dataUrl = `data:${imageMimeType};base64,${imageBase64}`;
+
+        const chatMessages: ChatMessage[] = [
+          {
+            role: "system",
+            content:
+              "You are a mobile app builder. When the user sends an image (screenshot, mockup, wireframe, or design), analyze it carefully and describe what app to build, then start building it step by step with detailed React Native / Expo code.",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "image_url", image_url: { url: dataUrl } },
+              { type: "text", text: displayText },
+            ],
+          },
+        ];
+
+        await _doSend(displayText, chatMessages, sid, streamId, controller, true);
+
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === sid
+              ? {
+                  ...s,
+                  messages: s.messages.map((m) =>
+                    m.id === streamId ? { ...m, streaming: false } : m
+                  ),
+                }
+              : s
+          )
+        );
+      } catch (err: any) {
+        if (err?.name === "AbortError") {
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === sid
+                ? {
+                    ...s,
+                    messages: s.messages.map((m) =>
+                      m.id === streamId
+                        ? { ...m, content: m.content || "⏹ تم الإلغاء.", streaming: false }
+                        : m
+                    ),
+                  }
+                : s
+            )
+          );
+          return;
+        }
+
+        const errMsg = err?.message ?? "Vision error";
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === sid
+              ? {
+                  ...s,
+                  messages: s.messages.map((m) =>
+                    m.id === streamId
+                      ? { ...m, content: `⚠️ ${errMsg}`, streaming: false }
+                      : m
+                  ),
+                }
+              : s
+          )
+        );
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [currentSessionId, selectedAgent, isSending, _doSend]
   );
 
   return (
@@ -642,6 +794,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         createSession,
         selectSession,
         sendMessage,
+        sendVisionMessage,
         clearHistory,
         deleteSession,
         toggleExpanded,

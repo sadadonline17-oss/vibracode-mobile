@@ -5,6 +5,7 @@ import { Audio } from "expo-av";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import React, { useCallback, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Platform,
@@ -27,6 +28,7 @@ import SuggestionChips from "../components/SuggestionChips";
 import TasksCard from "../components/TasksCard";
 import { CONFIG } from "../config";
 import { Message, useChat } from "../context/ChatContext";
+import { useSettings } from "../context/SettingsContext";
 import SettingsScreen from "./SettingsScreen";
 
 export default function ChatScreen() {
@@ -45,9 +47,12 @@ export default function ChatScreen() {
     deleteSession,
     clearHistory,
     sendMessage,
+    sendVisionMessage,
     toggleExpanded,
     cancelMessage,
   } = useChat();
+
+  const { groqKey, getEffectiveOpenrouterKey } = useSettings();
 
   const [input, setInput] = useState("");
   const [showAgent, setShowAgent] = useState(false);
@@ -56,6 +61,7 @@ export default function ChatScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<ActionTabId | undefined>(undefined);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
 
   const listRef = useRef<FlatList<Message>>(null);
@@ -75,22 +81,93 @@ export default function ChatScreen() {
     await sendMessage(txt);
   }, [input, isSending, sendMessage]);
 
+  // ── Voice recording with real Whisper transcription ──────────────────
   const handleVoice = useCallback(async () => {
     if (Platform.OS === "web") {
-      Alert.alert("Voice", "Voice input is available on mobile devices only.");
+      Alert.alert("الصوت", "إدخال الصوت متاح فقط على الأجهزة المحمولة.");
       return;
     }
+
+    // Stop recording and transcribe
     if (isRecording && recording) {
-      await recording.stopAndUnloadAsync();
-      setIsRecording(false);
-      setRecording(null);
-      Alert.alert("Voice recorded", "Voice transcription coming soon.");
+      try {
+        setIsRecording(false);
+        setIsTranscribing(true);
+
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        setRecording(null);
+
+        if (!uri) {
+          setIsTranscribing(false);
+          return;
+        }
+
+        // Read audio file as base64
+        let base64Audio: string | null = null;
+        try {
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          base64Audio = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              resolve(result.split(",")[1] ?? "");
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch {}
+
+        if (!base64Audio) {
+          setIsTranscribing(false);
+          Alert.alert("خطأ", "تعذر قراءة ملف الصوت.");
+          return;
+        }
+
+        // Call API server transcription endpoint
+        const backendUrl = CONFIG.BACKEND_URL;
+        if (!backendUrl) {
+          setIsTranscribing(false);
+          Alert.alert("خطأ", "لم يتم إعداد خادم API.");
+          return;
+        }
+
+        const transcribeRes = await fetch(`${backendUrl}/transcribe`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            audio: base64Audio,
+            mimeType: "audio/m4a",
+            groqKey: groqKey || undefined,
+            openrouterKey: getEffectiveOpenrouterKey(),
+          }),
+        });
+
+        if (transcribeRes.ok) {
+          const { text } = (await transcribeRes.json()) as { text: string };
+          if (text?.trim()) {
+            setInput(text.trim());
+          } else {
+            Alert.alert("لا يوجد كلام", "لم يتم الكشف عن أي كلام. حاول مرة أخرى.");
+          }
+        } else {
+          const errData = await transcribeRes.json().catch(() => ({})) as any;
+          Alert.alert("خطأ في التفريغ", errData.error ?? "فشلت عملية التفريغ.");
+        }
+      } catch (e: any) {
+        Alert.alert("خطأ", e?.message ?? "فشل تفريغ الصوت.");
+      } finally {
+        setIsTranscribing(false);
+      }
       return;
     }
+
+    // Start recording
     try {
       const { granted } = await Audio.requestPermissionsAsync();
       if (!granted) {
-        Alert.alert("Permission needed", "Microphone permission is required.");
+        Alert.alert("إذن مطلوب", "يجب السماح باستخدام الميكروفون.");
         return;
       }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true });
@@ -99,12 +176,46 @@ export default function ChatScreen() {
       );
       setRecording(rec);
       setIsRecording(true);
-      if ((Platform.OS as string) !== "web")
+      if (Platform.OS !== "web")
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (e) {
-      Alert.alert("Error", "Could not start recording.");
+      Alert.alert("خطأ", "تعذر بدء التسجيل.");
     }
-  }, [isRecording, recording]);
+  }, [isRecording, recording, groqKey, getEffectiveOpenrouterKey]);
+
+  // ── Image picker with real vision support ────────────────────────────
+  const handleImagePick = useCallback(async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        quality: 0.8,
+        base64: true,
+        allowsEditing: false,
+        mediaTypes: "images",
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const asset = result.assets[0];
+      const base64 = asset.base64;
+
+      if (!base64) {
+        Alert.alert("خطأ", "تعذر قراءة الصورة.");
+        return;
+      }
+
+      // Determine MIME type
+      const mimeType = asset.mimeType ?? "image/jpeg";
+      const userText = input.trim() || "ما الذي يمكن بناؤه استناداً لهذه الصورة؟";
+      setInput("");
+
+      if (Platform.OS !== "web")
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      await sendVisionMessage(userText, base64, mimeType);
+    } catch (e: any) {
+      Alert.alert("خطأ", e?.message ?? "تعذر اختيار الصورة.");
+    }
+  }, [input, sendVisionMessage]);
 
   const handleTabPress = useCallback(
     (tab: ActionTabId) => {
@@ -130,7 +241,7 @@ export default function ChatScreen() {
           setInput("أضف نظام دفع مع Stripe ومدفوعات داخل التطبيق");
           break;
         case "image":
-          setInput("أنشئ لقطات شاشة احترافية للتطبيق لمتاجر التطبيقات");
+          handleImagePick();
           break;
         case "github":
           setInput("اربط التطبيق بـ GitHub: أنشئ مستودعاً، أضف CI/CD بـ GitHub Actions، واضبط النشر التلقائي");
@@ -143,7 +254,7 @@ export default function ChatScreen() {
           break;
       }
     },
-    []
+    [handleImagePick]
   );
 
   const renderItem = useCallback(
@@ -173,6 +284,9 @@ export default function ChatScreen() {
     },
     [toggleExpanded]
   );
+
+  const micColor = isRecording ? "#EF4444" : isTranscribing ? "#F97316" : "#555";
+  const micIcon = isRecording ? "square" : isTranscribing ? "loader" : "mic";
 
   return (
     <View style={s.root}>
@@ -248,6 +362,22 @@ export default function ChatScreen() {
           onSelect={(prompt) => { setInput(prompt); }}
         />
 
+        {/* ── Transcribing indicator ── */}
+        {isTranscribing && (
+          <View style={s.transcribingBanner}>
+            <ActivityIndicator size="small" color="#F97316" />
+            <Text style={s.transcribingText}>جارٍ تفريغ الصوت...</Text>
+          </View>
+        )}
+
+        {/* ── Recording indicator ── */}
+        {isRecording && (
+          <View style={s.recordingBanner}>
+            <View style={s.recordingDot} />
+            <Text style={s.recordingText}>جارٍ التسجيل... اضغط مجدداً للإيقاف</Text>
+          </View>
+        )}
+
         {/* ── Input Bar ── */}
         <View style={[s.inputBar, { paddingBottom: bottomPad }]}>
           {/* Agent / Provider selector button */}
@@ -266,20 +396,17 @@ export default function ChatScreen() {
           {/* Image attach */}
           <TouchableOpacity
             style={s.iconBtn}
-            onPress={async () => {
-              const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
-              if (!r.canceled)
-                sendMessage("[Image] Describe what to build based on: " + (r.assets[0].fileName ?? "screenshot"));
-            }}
+            onPress={handleImagePick}
+            disabled={isSending}
           >
-            <Feather name="image" size={18} color="#555" />
+            <Feather name="image" size={18} color={isSending ? "#333" : "#555"} />
           </TouchableOpacity>
 
           <TextInput
             style={s.input}
             value={input}
             onChangeText={setInput}
-            placeholder="Describe your app..."
+            placeholder="صف تطبيقك..."
             placeholderTextColor="#2E2E2E"
             multiline
             maxLength={4000}
@@ -311,12 +438,17 @@ export default function ChatScreen() {
           <TouchableOpacity
             style={[s.iconBtn, isRecording && s.recActive]}
             onPress={handleVoice}
+            disabled={isTranscribing || isSending}
           >
-            <Feather
-              name={isRecording ? "square" : "mic"}
-              size={18}
-              color={isRecording ? "#EF4444" : "#555"}
-            />
+            {isTranscribing ? (
+              <ActivityIndicator size="small" color="#F97316" />
+            ) : (
+              <Feather
+                name={isRecording ? "square" : "mic"}
+                size={18}
+                color={micColor}
+              />
+            )}
           </TouchableOpacity>
         </View>
         {Platform.OS === "web" && <View style={{ height: 34 }} />}
@@ -457,6 +589,44 @@ const s = StyleSheet.create({
     fontWeight: "700",
   },
 
+  recordingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#1A0A0A",
+    borderTopWidth: 1,
+    borderTopColor: "#EF444420",
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#EF4444",
+  },
+  recordingText: {
+    color: "#EF4444",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  transcribingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#1A100A",
+    borderTopWidth: 1,
+    borderTopColor: "#F9731620",
+  },
+  transcribingText: {
+    color: "#F97316",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -487,7 +657,12 @@ const s = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  recActive: {},
+  recActive: {
+    backgroundColor: "#1A0A0A",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#EF444440",
+  },
   input: {
     flex: 1,
     backgroundColor: "#141414",

@@ -13,8 +13,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const LATEST_APK_URL = "https://expo.dev/artifacts/eas/3KQnQDQ4a55RZShXakoVHK.apk";
-const LATEST_BUILD_URL = "https://expo.dev/accounts/admin44aa/projects/vibracode/builds/16511291-1e54-4178-b90b-7828db8b1be9";
+// Most recent completed APK build
+const LATEST_APK_URL =
+  "https://expo.dev/artifacts/eas/3KQnQDQ4a55RZShXakoVHK.apk";
+
+// Most recent triggered build (may still be building)
+const LATEST_BUILD_ID = "29c55ea4-fd67-4f82-b6ac-791ccd179bec";
+const LATEST_BUILD_URL = `https://expo.dev/accounts/admin44aa/projects/vibracode/builds/${LATEST_BUILD_ID}`;
 const APP_PAGE_URL = "https://expo.dev/accounts/admin44aa/projects/vibracode";
 
 interface Props {
@@ -94,6 +99,12 @@ export default function PublishModal({ visible, onClose }: Props) {
                   <Feather name="calendar" size={14} color="#F97316" />
                   <Text style={s.buildInfoText}>آخر بناء: 31 مارس 2026</Text>
                 </View>
+                <View style={s.buildInfoRow}>
+                  <Feather name="hash" size={14} color="#6E7681" />
+                  <Text style={s.buildInfoText} numberOfLines={1}>
+                    Build: {LATEST_BUILD_ID.slice(0, 8)}…
+                  </Text>
+                </View>
               </View>
 
               {/* Download buttons */}
@@ -122,6 +133,15 @@ export default function PublishModal({ visible, onClose }: Props) {
               >
                 <Feather name="external-link" size={14} color="#6C47FF" />
                 <Text style={s.secondaryBtnText}>عرض تفاصيل البناء على Expo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={s.secondaryBtn}
+                onPress={() => Linking.openURL(APP_PAGE_URL)}
+                activeOpacity={0.8}
+              >
+                <Feather name="aperture" size={14} color="#A78BFA" />
+                <Text style={[s.secondaryBtnText, { color: "#A78BFA" }]}>فتح Expo Dashboard</Text>
               </TouchableOpacity>
             </>
           ) : (
