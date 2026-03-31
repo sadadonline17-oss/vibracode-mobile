@@ -12,11 +12,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MarketplaceScreen from "@/src/screens/MarketplaceScreen";
 import ChatScreen from "@/src/screens/ChatScreen";
 import SkillsScreen from "@/src/screens/SkillsScreen";
+import PreviewScreen from "@/src/screens/PreviewScreen";
 
-type TabId = "chat" | "marketplace" | "skills";
+type TabId = "chat" | "preview" | "marketplace" | "skills";
 
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "chat", label: "الدردشة", icon: "message-circle" },
+  { id: "preview", label: "معاينة", icon: "monitor" },
   { id: "marketplace", label: "المتجر", icon: "shopping-bag" },
   { id: "skills", label: "المهارات", icon: "zap" },
 ];
@@ -31,6 +33,8 @@ export default function HomeScreen() {
     switch (activeTab) {
       case "chat":
         return <ChatScreen />;
+      case "preview":
+        return <PreviewScreen />;
       case "marketplace":
         return <MarketplaceScreen />;
       case "skills":
@@ -64,7 +68,7 @@ export default function HomeScreen() {
               <View style={[s.tabIconWrap, active && s.tabIconWrapActive]}>
                 <Feather
                   name={tab.icon as any}
-                  size={20}
+                  size={19}
                   color={active ? "#6C47FF" : "#3A3A3A"}
                 />
               </View>

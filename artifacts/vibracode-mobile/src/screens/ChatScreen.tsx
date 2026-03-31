@@ -248,6 +248,9 @@ export default function ChatScreen() {
           />
         </View>
 
+        {/* ── Action Tabs ── */}
+        <ActionTabs mode="chat" activeTab={activeTab} onPress={handleTabPress} />
+
         {/* ── Input Bar ── */}
         <View style={[s.inputBar, { paddingBottom: bottomPad }]}>
           {/* Agent / Provider selector button */}
@@ -319,9 +322,6 @@ export default function ChatScreen() {
             />
           </TouchableOpacity>
         </View>
-
-        {/* ── Action Tabs ── */}
-        <ActionTabs mode="chat" activeTab={activeTab} onPress={handleTabPress} />
         {Platform.OS === "web" && <View style={{ height: 34 }} />}
       </KeyboardAvoidingView>
 
