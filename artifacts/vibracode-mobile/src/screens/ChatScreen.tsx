@@ -116,19 +116,28 @@ export default function ChatScreen() {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           break;
         case "audio":
-          setInput("Add background music and sound effects to the app");
+          setInput("أضف موسيقى خلفية ومؤثرات صوتية للتطبيق");
           break;
         case "logs":
-          setInput("Show me the build logs and any errors");
+          setInput("أظهر سجلات البناء والأخطاء");
           break;
         case "db":
-          setInput("Add a database with user profiles and data persistence");
+          setInput("أضف قاعدة بيانات Convex مع ملفات المستخدمين والمزامنة الفورية");
           break;
         case "payment":
-          setInput("Add in-app purchases and Stripe payment processing");
+          setInput("أضف نظام دفع مع Stripe ومدفوعات داخل التطبيق");
           break;
         case "image":
-          setInput("Generate app screenshots and preview images for the stores");
+          setInput("أنشئ لقطات شاشة احترافية للتطبيق لمتاجر التطبيقات");
+          break;
+        case "github":
+          setInput("اربط التطبيق بـ GitHub: أنشئ مستودعاً، أضف CI/CD بـ GitHub Actions، واضبط النشر التلقائي");
+          break;
+        case "test":
+          setInput("اكتب اختبارات شاملة للتطبيق: Unit Tests بـ Jest، Integration Tests، وE2E Tests");
+          break;
+        case "deploy":
+          setInput("ابنِ ملف APK للأندرويد بـ EAS Build وأرسل رابط التحميل");
           break;
       }
     },

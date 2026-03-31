@@ -16,7 +16,10 @@ export type ActionTabId =
   | "payment"
   | "publish"
   | "db"
-  | "image";
+  | "image"
+  | "github"
+  | "test"
+  | "deploy";
 
 interface Tab {
   id: ActionTabId;
@@ -25,21 +28,24 @@ interface Tab {
 }
 
 const CHAT_TABS: Tab[] = [
-  { id: "audio",   label: "Audio",   icon: "bar-chart-2" },
-  { id: "logs",    label: "Logs",    icon: "file-text" },
-  { id: "haptic",  label: "Haptic",  icon: "smartphone" },
-  { id: "payment", label: "Payment", icon: "dollar-sign" },
-  { id: "publish", label: "Publish", icon: "upload-cloud" },
-  { id: "db",      label: "DB",      icon: "database" },
+  { id: "publish", label: "نشر", icon: "upload-cloud" },
+  { id: "db",      label: "قاعدة بيانات", icon: "database" },
+  { id: "github",  label: "GitHub", icon: "github" },
+  { id: "test",    label: "اختبار", icon: "shield" },
+  { id: "deploy",  label: "نشر APK", icon: "smartphone" },
+  { id: "payment", label: "دفع", icon: "dollar-sign" },
+  { id: "audio",   label: "صوت",   icon: "bar-chart-2" },
+  { id: "logs",    label: "سجلات",    icon: "file-text" },
+  { id: "image",   label: "صورة",   icon: "image" },
 ];
 
 const PREVIEW_TABS: Tab[] = [
-  { id: "image",   label: "Image",   icon: "image" },
-  { id: "audio",   label: "Audio",   icon: "bar-chart-2" },
-  { id: "logs",    label: "Logs",    icon: "file-text" },
-  { id: "haptic",  label: "Haptic",  icon: "smartphone" },
-  { id: "payment", label: "Payment", icon: "dollar-sign" },
-  { id: "publish", label: "Publish", icon: "upload-cloud" },
+  { id: "image",   label: "صورة",   icon: "image" },
+  { id: "audio",   label: "صوت",   icon: "bar-chart-2" },
+  { id: "logs",    label: "سجلات",    icon: "file-text" },
+  { id: "haptic",  label: "اهتزاز",  icon: "smartphone" },
+  { id: "payment", label: "دفع", icon: "dollar-sign" },
+  { id: "publish", label: "نشر", icon: "upload-cloud" },
 ];
 
 interface Props {
