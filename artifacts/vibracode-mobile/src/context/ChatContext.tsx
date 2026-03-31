@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 import { AgentType, CONFIG } from "../config";
+import { useSettings } from "./SettingsContext";
 
 export type MessageType =
   | "message"
@@ -290,6 +291,7 @@ async function callWithFallback(
 }
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
+  const { getEffectiveOpenrouterKey } = useSettings();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<AgentType>(CONFIG.DEFAULT_AGENT);
@@ -496,7 +498,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           model,
           fallback,
           chatMessages,
-          CONFIG.OPENROUTER_API_KEY,
+          getEffectiveOpenrouterKey(),
           controller.signal,
           (chunk) => {
             accumulated += chunk;

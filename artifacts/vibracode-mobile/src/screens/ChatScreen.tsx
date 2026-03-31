@@ -26,6 +26,7 @@ import SessionsDrawer from "../components/SessionsDrawer";
 import TasksCard from "../components/TasksCard";
 import { CONFIG } from "../config";
 import { Message, useChat } from "../context/ChatContext";
+import SettingsScreen from "./SettingsScreen";
 
 export default function ChatScreen() {
   const {
@@ -50,6 +51,7 @@ export default function ChatScreen() {
   const [showAgent, setShowAgent] = useState(false);
   const [showSessions, setShowSessions] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<ActionTabId | undefined>(undefined);
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -195,6 +197,14 @@ export default function ChatScreen() {
           >
             <Feather name="refresh-ccw" size={13} color="#AAA" />
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.settingsBtn}
+            onPress={() => setShowSettings(true)}
+            activeOpacity={0.8}
+          >
+            <Feather name="settings" size={15} color="#888" />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -328,6 +338,7 @@ export default function ChatScreen() {
         onClose={() => setShowSessions(false)}
       />
       <PublishModal visible={showPublish} onClose={() => setShowPublish(false)} />
+      <SettingsScreen visible={showSettings} onClose={() => setShowSettings(false)} />
     </View>
   );
 }
@@ -390,6 +401,16 @@ const s = StyleSheet.create({
     fontWeight: "700",
   },
   clearBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#161616",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#222",
+  },
+  settingsBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
