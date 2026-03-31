@@ -1,0 +1,9 @@
+# E2B Sandbox Template Config
+# Run: npx @e2b/cli template build
+
+dockerfile = "Dockerfile"
+template_name = "vibracode-sandbox"
+
+[hardware]
+memory_mb = 2048
+vcpus = 2
