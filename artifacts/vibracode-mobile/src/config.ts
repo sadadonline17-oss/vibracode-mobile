@@ -95,7 +95,7 @@ export const CONFIG = {
     process.env.EXPO_PUBLIC_CLERK_KEY ?? "",
 
   CONVEX_URL:
-    process.env.EXPO_PUBLIC_CONVEX_URL ?? "",
+    process.env.EXPO_PUBLIC_CONVEX_URL ?? "https://judicious-robin-234.convex.cloud",
 
   BACKEND_URL:
     process.env.EXPO_PUBLIC_BACKEND_URL ??

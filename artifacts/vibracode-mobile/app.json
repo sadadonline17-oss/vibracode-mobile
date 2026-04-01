@@ -31,8 +31,7 @@
         "INTERNET"
       ],
       "allowBackup": false,
-      "softwareKeyboardLayoutMode": "pan",
-      "usesCleartextTraffic": false
+      "softwareKeyboardLayoutMode": "pan"
     },
     "ios": {
       "bundleIdentifier": "com.vibracode.app",
