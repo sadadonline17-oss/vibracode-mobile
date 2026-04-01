@@ -16,7 +16,12 @@ export type MessageType =
   | "edit"
   | "bash"
   | "tasks"
-  | "status";
+  | "tasks_card"
+  | "read_file"
+  | "edit_file"
+  | "status"
+  | "preview"
+  | "error";
 
 export interface TaskItem {
   text: string;
@@ -45,7 +50,7 @@ export interface Session {
   createdAt: number;
 }
 
-interface ChatContextValue {
+export interface ChatContextValue {
   sessions: Session[];
   currentSessionId: string | null;
   currentSession: Session | null;
@@ -67,7 +72,7 @@ interface ChatContextValue {
   removeActiveSkill: (skillTitle: string) => void;
 }
 
-const ChatContext = createContext<ChatContextValue | null>(null);
+export const ChatContext = createContext<ChatContextValue | null>(null);
 const STORAGE_KEY = "vibracode_v4";
 
 export function generateId() {

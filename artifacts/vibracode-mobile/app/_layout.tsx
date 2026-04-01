@@ -16,7 +16,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { ChatProvider } from "@/src/context/ChatContext";
+import { ConvexChatProvider } from "@/src/context/ConvexChatProvider";
+import { ConvexChatBoundary } from "@/src/context/ConvexChatBoundary";
 import { SettingsProvider } from "@/src/context/SettingsContext";
 import { CONFIG } from "@/src/config";
 
@@ -83,9 +84,11 @@ export default function RootLayout() {
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
                 <SettingsProvider>
-                  <ChatProvider>
-                    <RootLayoutNav />
-                  </ChatProvider>
+                  <ConvexChatBoundary fallbackChildren={<RootLayoutNav />}>
+                    <ConvexChatProvider>
+                      <RootLayoutNav />
+                    </ConvexChatProvider>
+                  </ConvexChatBoundary>
                 </SettingsProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>
