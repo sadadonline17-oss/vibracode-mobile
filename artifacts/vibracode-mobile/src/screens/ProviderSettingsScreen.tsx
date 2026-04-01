@@ -45,7 +45,7 @@ export default function ProviderSettingsScreen() {
             headers: form.apiKey ? { Authorization: `Bearer ${form.apiKey}` } : {},
             signal:  AbortSignal.timeout(5000),
           });
-          const d = await r.json() as { data?: Array<{ id: string }> };
+          const d = await r.json() as { data?: { id: string }[] };
           models = (d.data ?? []).map(m => m.id).slice(0, 50);
         } catch { models = []; }
       }
