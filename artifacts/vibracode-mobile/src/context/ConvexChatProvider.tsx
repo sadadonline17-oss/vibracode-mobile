@@ -62,6 +62,64 @@ type ChatMsg =
   | { role: string; content: string }
   | { role: string; content: ContentPart[] };
 
+// ── Backend proxy (preferred — avoids browser CORS/CSP issues) ───────────────
+async function callBackendChatStream(
+  backendUrl: string,
+  model: string,
+  fallbackModel: string,
+  messages: ChatMsg[],
+  apiKey: string,
+  signal: AbortSignal,
+  onChunk: (text: string) => void
+): Promise<void> {
+  const resp = await fetch(`${backendUrl}/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, fallback: fallbackModel, messages, openrouterKey: apiKey }),
+    signal,
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    let msg = `Error ${resp.status}`;
+    try { msg = JSON.parse(errText)?.error ?? msg; } catch {}
+    throw new Error(msg);
+  }
+
+  const reader = resp.body?.getReader();
+  if (!reader) throw new Error("No response stream");
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let currentEvent = "chunk";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("event: ")) {
+        currentEvent = trimmed.slice(7).trim();
+      } else if (trimmed.startsWith("data: ")) {
+        const raw = trimmed.slice(6);
+        if (currentEvent === "done") return;
+        if (currentEvent === "error") {
+          try { throw new Error(JSON.parse(raw).content ?? raw); } catch (e: any) { throw e; }
+        }
+        try {
+          const parsed = JSON.parse(raw);
+          const delta = parsed.content ?? parsed.choices?.[0]?.delta?.content ?? "";
+          if (delta) onChunk(delta);
+        } catch {}
+        currentEvent = "chunk";
+      }
+    }
+  }
+}
+
+// ── Direct OpenRouter call (fallback when no backend URL) ────────────────────
 async function callOpenRouter(
   model: string,
   messages: ChatMsg[],
@@ -118,8 +176,20 @@ async function callWithFallback(
   messages: ChatMsg[],
   apiKey: string,
   signal: AbortSignal,
-  onChunk: (t: string) => void
+  onChunk: (t: string) => void,
+  backendUrl?: string
 ) {
+  // Use backend proxy when available (avoids browser CORS/CSP restrictions)
+  if (backendUrl) {
+    try {
+      await callBackendChatStream(backendUrl, primary, fallback, messages, apiKey, signal, onChunk);
+      return;
+    } catch (err: any) {
+      if (err?.name === "AbortError") throw err;
+      // Fall through to direct call
+    }
+  }
+  // Direct OpenRouter call (fallback)
   try {
     await callOpenRouter(primary, messages, apiKey, signal, onChunk);
   } catch (err: any) {
@@ -470,7 +540,8 @@ export function ConvexChatProvider({ children }: { children: React.ReactNode }) 
           (chunk) => {
             accumulated += chunk;
             setStreamingMsg((m) => m ? { ...m, content: accumulated } : null);
-          }
+          },
+          backendUrl || undefined
         );
 
         setStreamingMsg(null);

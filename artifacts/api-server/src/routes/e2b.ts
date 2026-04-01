@@ -98,7 +98,7 @@ const AGENT_CONFIG: Record<
     template: "claude",
     command: (p) =>
       `ANTHROPIC_BASE_URL="https://openrouter.ai/api" ` +
-      `claude --dangerously-skip-permissions --output-format stream-json -p "${esc(p)}"`,
+      `claude --dangerously-skip-permissions --verbose --output-format stream-json -p "${esc(p)}"`,
   },
 
   // ── OpenCode (opencode.ai) ────────────────────────────────────────────────
@@ -130,7 +130,7 @@ const AGENT_CONFIG: Record<
     command: (p, key) =>
       `ANTHROPIC_BASE_URL="https://openrouter.ai/api" ` +
       `ANTHROPIC_AUTH_TOKEN="${key}" ` +
-      `claude --dangerously-skip-permissions --output-format stream-json -p ` +
+      `claude --dangerously-skip-permissions --verbose --output-format stream-json -p ` +
       `"[Kilo Code Mode] You are an expert AI coding assistant. ` +
       `Analyze the task carefully, plan your approach, write complete production-ready code. ` +
       `Task: ${esc(p)}"`,
@@ -166,7 +166,7 @@ const AGENT_CONFIG: Record<
     command: (p, key) =>
       `ANTHROPIC_BASE_URL="https://openrouter.ai/api" ` +
       `ANTHROPIC_AUTH_TOKEN="${key}" ` +
-      `claude --dangerously-skip-permissions --output-format stream-json -p ` +
+      `claude --dangerously-skip-permissions --verbose --output-format stream-json -p ` +
       `"[Kilo Code Mode] You are an expert AI coding assistant. ` +
       `Analyze the task carefully, plan your approach, write complete production-ready code. ` +
       `Task: ${esc(p)}"`,
