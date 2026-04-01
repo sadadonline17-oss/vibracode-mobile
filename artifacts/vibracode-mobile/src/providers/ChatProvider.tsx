@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 
@@ -25,14 +25,12 @@ export interface ChatContextValue {
 const ChatCtx = createContext<ChatContextValue | null>(null);
 
 const STORAGE_KEY = 'vibracode_messages';
-const UPGRADE_INTERVAL = 30_000;
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages,   setMessages] = useState<Message[]>([]);
   const [isLoading,  setLoading]  = useState(false);
   const [isOnline,   setOnline]   = useState(true);
   const [sessionId,  setSessionId] = useState<string | null>(null);
-  const upgradeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
@@ -52,17 +50,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const full: Message = { ...msg, id: `${Date.now()}-${Math.random().toString(36).slice(2)}` };
     setMessages((prev) => [...prev, full]);
     return full.id;
-  }
-
-  function updateLastAssistantMessage(patch: Partial<Message>) {
-    setMessages((prev) => {
-      const idx = [...prev].reverse().findIndex((m) => m.role === 'assistant');
-      if (idx === -1) return prev;
-      const realIdx = prev.length - 1 - idx;
-      const updated = [...prev];
-      updated[realIdx] = { ...updated[realIdx], ...patch };
-      return updated;
-    });
   }
 
   async function sendMessage(prompt: string, agentId = 'claude') {

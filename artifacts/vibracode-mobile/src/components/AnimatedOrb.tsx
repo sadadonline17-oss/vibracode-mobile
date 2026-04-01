@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { Animated, StyleSheet } from "react-native";
 
 interface Props {
   size?: number;
@@ -75,7 +75,7 @@ export default function AnimatedOrb({ size = 90, style }: Props) {
         {
           width: size,
           height: size,
-          transform: [{ scale }],
+          transform: [{ scale }, { rotate: spin }],
         },
         style,
       ]}

@@ -367,31 +367,31 @@ export function useMarketplace() {
     async (agentId: string) => {
       setInstalling((prev) => new Set(prev).add(agentId));
 
-      await new Promise((r) => setTimeout(r, 1200));
+      try {
+        // Read persisted state and determine new install status
+        const raw = await AsyncStorage.getItem(MARKETPLACE_KEY).catch(() => "{}");
+        const saved: Record<string, { installed: boolean; version: string; stars?: number; forks?: number; fetchedAt?: number }> = JSON.parse(raw ?? "{}");
+        const agent = agents.find((a) => a.id === agentId);
+        if (agent) {
+          const nowInstalled = !agent.installed;
+          saved[agentId] = { ...saved[agentId], installed: nowInstalled, version: agent.version };
+          await AsyncStorage.setItem(MARKETPLACE_KEY, JSON.stringify(saved)).catch(() => {});
+        }
 
-      setAgents((prev) =>
-        prev.map((a) =>
-          a.id === agentId
-            ? { ...a, installed: !a.installed, updateAvailable: false }
-            : a
-        )
-      );
-
-      const raw = await AsyncStorage.getItem(MARKETPLACE_KEY).catch(() => "{}");
-      const saved = JSON.parse(raw ?? "{}");
-      const agent = agents.find((a) => a.id === agentId);
-      if (agent) {
-        saved[agentId] = { installed: !agent.installed, version: agent.version };
-        await AsyncStorage.setItem(MARKETPLACE_KEY, JSON.stringify(saved)).catch(
-          () => {}
+        setAgents((prev) =>
+          prev.map((a) =>
+            a.id === agentId
+              ? { ...a, installed: !a.installed, updateAvailable: false }
+              : a
+          )
         );
+      } finally {
+        setInstalling((prev) => {
+          const next = new Set(prev);
+          next.delete(agentId);
+          return next;
+        });
       }
-
-      setInstalling((prev) => {
-        const next = new Set(prev);
-        next.delete(agentId);
-        return next;
-      });
     },
     [agents]
   );

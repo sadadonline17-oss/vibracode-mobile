@@ -12,8 +12,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let WebView: any = null;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   WebView = require("react-native-webview").WebView;
 } catch {}
 

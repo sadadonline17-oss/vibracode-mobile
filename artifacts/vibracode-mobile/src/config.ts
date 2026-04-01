@@ -89,16 +89,13 @@ Rules: Complete TypeScript code only. Dark theme (#0A0A0A). expo-router navigati
 
 export const CONFIG = {
   OPENROUTER_API_KEY:
-    process.env.EXPO_PUBLIC_OPENROUTER_KEY ??
-    "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",
+    process.env.EXPO_PUBLIC_OPENROUTER_KEY ?? "",
 
   CLERK_PUBLISHABLE_KEY:
-    process.env.EXPO_PUBLIC_CLERK_KEY ??
-    "pk_test_bWVhc3VyZWQtYWlyZWRhbGUtNjEuY2xlcmsuYWNjb3VudHMuZGV2JA",
+    process.env.EXPO_PUBLIC_CLERK_KEY ?? "",
 
   CONVEX_URL:
-    process.env.EXPO_PUBLIC_CONVEX_URL ??
-    "https://astute-ladybug-398.convex.cloud",
+    process.env.EXPO_PUBLIC_CONVEX_URL ?? "",
 
   BACKEND_URL:
     process.env.EXPO_PUBLIC_BACKEND_URL ??
@@ -107,8 +104,7 @@ export const CONFIG = {
       : ""),
 
   E2B_API_KEY:
-    process.env.EXPO_PUBLIC_E2B_KEY ??
-    "e2b_51e98476ce3cdfff4768678430d5527df28b169a",
+    process.env.EXPO_PUBLIC_E2B_KEY ?? "",
 
   GEMINI_API_KEY: process.env.EXPO_PUBLIC_GEMINI_KEY ?? "",
   ANTHROPIC_API_KEY: process.env.EXPO_PUBLIC_ANTHROPIC_KEY ?? "",

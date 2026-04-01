@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 let _Clipboard: { setString: (s: string) => void } | null = null;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const rn = require("react-native");
   if (rn.Clipboard?.setString) _Clipboard = rn.Clipboard;
 } catch {}

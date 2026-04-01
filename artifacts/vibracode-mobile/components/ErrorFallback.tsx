@@ -38,6 +38,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
     try {
       await reloadAppAsync();
     } catch (restartError) {
+      // eslint-disable-next-line no-console
       console.error("Failed to restart app:", restartError);
       resetError();
     }

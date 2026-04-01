@@ -3,7 +3,6 @@ import * as WebBrowser from "expo-web-browser";
 import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   Platform,
   StyleSheet,
@@ -24,8 +23,10 @@ const QUICK_SITES = [
   { label: "GitHub", url: "https://github.com", icon: "github" },
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let WebView: any = null;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   WebView = require("react-native-webview").WebView;
 } catch {}
 
