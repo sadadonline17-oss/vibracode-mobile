@@ -1,30 +1,21 @@
 export type AgentType =
-  | "claude"
-  | "gemini"
+  | "auto"
   | "qwen"
-  | "kimi"
-  | "hermes"
-  | "codex"
-  | "deepseek"
-  | "llama"
-  | "mistral"
-  | "phi"
-  | "grok"
   | "nemotron"
-  | "openclaw"
-  | "groq"
-  | "perplexity"
-  | "cohere"
-  | "command"
-  | "pixtral";
+  | "gemma"
+  | "hermes"
+  | "llama"
+  | "minimax"
+  | "glm"
+  | "qwen_next"
+  | "nvidia_nano"
+  | "stepfun"
+  | "arcee"
+  | "qwen_coder";
 
 export type ProviderType = "openrouter" | "e2b" | "groq";
 
-// Only agents with verified E2B templates
-export const E2B_AGENT_MAP: Partial<Record<AgentType, string>> = {
-  claude: "claude-code",
-  codex: "codex",
-};
+export const E2B_AGENT_MAP: Partial<Record<AgentType, string>> = {};
 
 export interface Agent {
   id: AgentType;
@@ -54,7 +45,7 @@ Tech stack you use:
 - AsyncStorage for local persistence
 - @expo/vector-icons (Feather set)
 - react-native-safe-area-context
-- expo-haptics, expo-image-picker, expo-av
+- expo-haptics, expo-image-picker
 
 Code style:
 - StyleSheet.create() for all styles
@@ -111,54 +102,16 @@ export const CONFIG = {
   PERPLEXITY_API_KEY: process.env.EXPO_PUBLIC_PERPLEXITY_KEY ?? "",
 
   AGENTS: [
-    // ── E2B Real Sandbox Agents ─────────────────────────────────────────────
     {
-      id: "claude" as AgentType,
-      label: "Claude Code",
-      icon: "cpu",
-      color: "#A855F7",
-      model: "anthropic/claude-3.5-sonnet",
-      fallback: "anthropic/claude-3-haiku",
-      description: "صندوق حماية حقيقي · يبني تطبيقات كاملة",
-      provider: "e2b" as ProviderType,
-      badge: "E2B · Anthropic",
-      systemPrompt: CODING_PROMPT,
-    },
-    {
-      id: "codex" as AgentType,
-      label: "Codex CLI",
-      icon: "terminal",
-      color: "#10B981",
-      model: "openai/gpt-4o",
-      fallback: "openai/gpt-4o-mini",
-      description: "صندوق حماية حقيقي · OpenAI Codex",
-      provider: "e2b" as ProviderType,
-      badge: "E2B · OpenAI",
-      systemPrompt: CODING_PROMPT,
-    },
-    {
-      id: "openclaw" as AgentType,
-      label: "OpenClaw",
-      icon: "git-branch",
-      color: "#F43F5E",
-      model: "openrouter/auto",
-      fallback: "qwen/qwen-2.5-coder-32b:free",
-      description: "صندوق حماية حقيقي · متعدد الوكلاء",
-      provider: "e2b" as ProviderType,
-      badge: "E2B · Multi-Agent",
-      systemPrompt: CODING_PROMPT,
-    },
-    // ── OpenRouter Agents ───────────────────────────────────────────────────
-    {
-      id: "gemini" as AgentType,
-      label: "Gemini 2.5",
-      icon: "star",
-      color: "#3B82F6",
-      model: "google/gemini-2.5-flash-preview:free",
-      fallback: "google/gemini-2.0-flash-exp:free",
-      description: "Google AI · سريع ومجاني",
+      id: "auto" as AgentType,
+      label: "Auto Free",
+      icon: "zap",
+      color: "#6C47FF",
+      model: "openrouter/free",
+      fallback: "qwen/qwen3.6-plus-preview:free",
+      description: "يختار أفضل نموذج مجاني تلقائياً",
       provider: "openrouter" as ProviderType,
-      badge: "Google",
+      badge: "Auto",
       systemPrompt: CODING_PROMPT,
     },
     {
@@ -166,257 +119,176 @@ export const CONFIG = {
       label: "Qwen 3 Coder",
       icon: "code",
       color: "#22C55E",
-      model: "qwen/qwen3-235b-a22b:free",
-      fallback: "qwen/qwen-2.5-coder-32b:free",
-      description: "أفضل مبرمج مفتوح المصدر",
+      model: "qwen/qwen3-coder:free",
+      fallback: "openrouter/free",
+      description: "Qwen3 Coder 480B · أفضل للكود",
       provider: "openrouter" as ProviderType,
       badge: "Alibaba",
       systemPrompt: CODING_PROMPT,
     },
     {
-      id: "deepseek" as AgentType,
-      label: "DeepSeek R1",
-      icon: "layers",
-      color: "#EF4444",
-      model: "deepseek/deepseek-r1:free",
-      fallback: "deepseek/deepseek-chat:free",
-      description: "تفكير عميق ومنطق متقدم",
+      id: "qwen_next" as AgentType,
+      label: "Qwen3.6 Plus",
+      icon: "star",
+      color: "#3B82F6",
+      model: "qwen/qwen3.6-plus-preview:free",
+      fallback: "openrouter/free",
+      description: "Qwen 3.6 Plus · متقدم ومجاني",
       provider: "openrouter" as ProviderType,
-      badge: "DeepSeek",
-      systemPrompt: REASONING_PROMPT,
-    },
-    {
-      id: "kimi" as AgentType,
-      label: "Kimi K2",
-      icon: "moon",
-      color: "#06B6D4",
-      model: "moonshotai/kimi-k2:free",
-      fallback: "moonshotai/kimi-k2:free",
-      description: "سياق طويل · مليون رمز",
-      provider: "openrouter" as ProviderType,
-      badge: "Moonshot",
+      badge: "Alibaba",
       systemPrompt: CODING_PROMPT,
-    },
-    {
-      id: "llama" as AgentType,
-      label: "Llama 4 Scout",
-      icon: "box",
-      color: "#8B5CF6",
-      model: "meta-llama/llama-4-scout:free",
-      fallback: "meta-llama/llama-3.3-70b-instruct:free",
-      description: "Meta مفتوح المصدر",
-      provider: "openrouter" as ProviderType,
-      badge: "Meta",
-      systemPrompt: CODING_PROMPT,
-    },
-    {
-      id: "groq" as AgentType,
-      label: "Groq Llama",
-      icon: "zap",
-      color: "#F59E0B",
-      model: "meta-llama/llama-3.3-70b-versatile:free",
-      fallback: "meta-llama/llama-3.1-8b-instant:free",
-      description: "Groq · أسرع استجابة",
-      provider: "openrouter" as ProviderType,
-      badge: "Groq",
-      systemPrompt: FAST_PROMPT,
-    },
-    {
-      id: "hermes" as AgentType,
-      label: "Hermes 3",
-      icon: "feather",
-      color: "#F59E0B",
-      model: "nousresearch/hermes-3-llama-3.1-70b:free",
-      fallback: "nousresearch/hermes-3-llama-3.1-405b:free",
-      description: "مضبوط على التعليمات · 70B",
-      provider: "openrouter" as ProviderType,
-      badge: "NousResearch",
-      systemPrompt: CODING_PROMPT,
-    },
-    {
-      id: "mistral" as AgentType,
-      label: "Mistral Small",
-      icon: "wind",
-      color: "#EC4899",
-      model: "mistralai/mistral-small:free",
-      fallback: "mistralai/mistral-nemo:free",
-      description: "Mistral AI · سريع",
-      provider: "openrouter" as ProviderType,
-      badge: "Mistral",
-      systemPrompt: FAST_PROMPT,
-    },
-    {
-      id: "pixtral" as AgentType,
-      label: "Pixtral Large",
-      icon: "eye",
-      color: "#EC4899",
-      model: "mistralai/pixtral-large-2411:free",
-      fallback: "mistralai/mistral-small:free",
-      description: "Mistral · رؤية + كود",
-      provider: "openrouter" as ProviderType,
-      badge: "Mistral Vision",
-      systemPrompt: CODING_PROMPT,
-    },
-    {
-      id: "phi" as AgentType,
-      label: "Phi-4",
-      icon: "triangle",
-      color: "#0EA5E9",
-      model: "microsoft/phi-4:free",
-      fallback: "microsoft/phi-3-medium-128k-instruct:free",
-      description: "Microsoft SLM · فعّال",
-      provider: "openrouter" as ProviderType,
-      badge: "Microsoft",
-      systemPrompt: FAST_PROMPT,
-    },
-    {
-      id: "grok" as AgentType,
-      label: "Grok 3 Mini",
-      icon: "aperture",
-      color: "#F97316",
-      model: "x-ai/grok-3-mini-beta:free",
-      fallback: "x-ai/grok-3-mini-beta:free",
-      description: "xAI · تفكير",
-      provider: "openrouter" as ProviderType,
-      badge: "xAI",
-      systemPrompt: REASONING_PROMPT,
     },
     {
       id: "nemotron" as AgentType,
-      label: "Nemotron 70B",
+      label: "Nemotron 120B",
       icon: "activity",
       color: "#76C442",
-      model: "nvidia/llama-3.1-nemotron-70b-instruct:free",
-      fallback: "meta-llama/llama-3.1-70b-instruct:free",
-      description: "NVIDIA مضبوط · 70B",
+      model: "nvidia/nemotron-3-super-120b-a12b:free",
+      fallback: "openrouter/free",
+      description: "NVIDIA 120B · قوة عالية",
       provider: "openrouter" as ProviderType,
       badge: "NVIDIA",
       systemPrompt: CODING_PROMPT,
     },
     {
-      id: "cohere" as AgentType,
-      label: "Command R+",
-      icon: "bar-chart",
-      color: "#FF7F50",
-      model: "cohere/command-r-plus:free",
-      fallback: "cohere/command-r:free",
-      description: "Cohere · RAG متقدم",
+      id: "gemma" as AgentType,
+      label: "Gemma 3 27B",
+      icon: "star",
+      color: "#4285F4",
+      model: "google/gemma-3-27b-it:free",
+      fallback: "openrouter/free",
+      description: "Google Gemma 3 · مفتوح المصدر",
       provider: "openrouter" as ProviderType,
-      badge: "Cohere",
+      badge: "Google",
       systemPrompt: CODING_PROMPT,
     },
     {
-      id: "command" as AgentType,
-      label: "GLM Z1 32B",
+      id: "hermes" as AgentType,
+      label: "Hermes 3 405B",
+      icon: "feather",
+      color: "#F59E0B",
+      model: "nousresearch/hermes-3-llama-3.1-405b:free",
+      fallback: "openrouter/free",
+      description: "Nous Hermes 405B · ضخم",
+      provider: "openrouter" as ProviderType,
+      badge: "NousResearch",
+      systemPrompt: CODING_PROMPT,
+    },
+    {
+      id: "llama" as AgentType,
+      label: "Llama 3.3 70B",
+      icon: "box",
+      color: "#8B5CF6",
+      model: "meta-llama/llama-3.3-70b-instruct:free",
+      fallback: "openrouter/free",
+      description: "Meta Llama 3.3 · مفتوح المصدر",
+      provider: "openrouter" as ProviderType,
+      badge: "Meta",
+      systemPrompt: CODING_PROMPT,
+    },
+    {
+      id: "nvidia_nano" as AgentType,
+      label: "Nemotron Nano",
+      icon: "cpu",
+      color: "#10B981",
+      model: "nvidia/nemotron-nano-12b-v2-vl:free",
+      fallback: "openrouter/free",
+      description: "NVIDIA 12B رؤية + كود",
+      provider: "openrouter" as ProviderType,
+      badge: "NVIDIA Vision",
+      systemPrompt: CODING_PROMPT,
+    },
+    {
+      id: "glm" as AgentType,
+      label: "GLM 4.5 Air",
       icon: "grid",
       color: "#14B8A6",
-      model: "thudm/glm-z1-32b:free",
-      fallback: "thudm/glm-4-9b:free",
-      description: "THUDM · تفكير مفتوح",
+      model: "z-ai/glm-4.5-air:free",
+      fallback: "openrouter/free",
+      description: "Z.ai GLM 4.5 · سريع",
       provider: "openrouter" as ProviderType,
-      badge: "THUDM",
+      badge: "Z.ai",
       systemPrompt: REASONING_PROMPT,
     },
     {
-      id: "perplexity" as AgentType,
-      label: "Perplexity",
-      icon: "search",
-      color: "#6366F1",
-      model: "perplexity/llama-3.1-sonar-large-128k-online:free",
-      fallback: "perplexity/llama-3.1-sonar-small-128k-online:free",
-      description: "بحث + كود · في الوقت الفعلي",
+      id: "minimax" as AgentType,
+      label: "MiniMax M2.5",
+      icon: "layers",
+      color: "#EF4444",
+      model: "minimax/minimax-m2.5:free",
+      fallback: "openrouter/free",
+      description: "MiniMax M2.5 · سياق طويل",
       provider: "openrouter" as ProviderType,
-      badge: "Perplexity",
+      badge: "MiniMax",
+      systemPrompt: CODING_PROMPT,
+    },
+    {
+      id: "stepfun" as AgentType,
+      label: "Step 3.5 Flash",
+      icon: "wind",
+      color: "#EC4899",
+      model: "stepfun/step-3.5-flash:free",
+      fallback: "openrouter/free",
+      description: "StepFun Flash · خفيف وسريع",
+      provider: "openrouter" as ProviderType,
+      badge: "StepFun",
+      systemPrompt: FAST_PROMPT,
+    },
+    {
+      id: "arcee" as AgentType,
+      label: "Trinity Large",
+      icon: "triangle",
+      color: "#0EA5E9",
+      model: "arcee-ai/trinity-large-preview:free",
+      fallback: "openrouter/free",
+      description: "Arcee AI Trinity · متعدد المهام",
+      provider: "openrouter" as ProviderType,
+      badge: "Arcee AI",
+      systemPrompt: FAST_PROMPT,
+    },
+    {
+      id: "qwen_coder" as AgentType,
+      label: "Qwen3 Next 80B",
+      icon: "terminal",
+      color: "#F97316",
+      model: "qwen/qwen3-next-80b-a3b-instruct:free",
+      fallback: "openrouter/free",
+      description: "Qwen 3 Next 80B · توازن مثالي",
+      provider: "openrouter" as ProviderType,
+      badge: "Alibaba",
       systemPrompt: CODING_PROMPT,
     },
   ] as Agent[],
 
-  DEFAULT_AGENT: "gemini" as AgentType,
+  DEFAULT_AGENT: "auto" as AgentType,
 
   FREE_MODELS: [
-    // ── Google ──────────────────────────────────────────────────────────────
-    { label: "Gemini 2.5 Flash Preview", value: "google/gemini-2.5-flash-preview:free", badge: "Google" },
-    { label: "Gemini 2.0 Flash Exp", value: "google/gemini-2.0-flash-exp:free", badge: "Google" },
-    { label: "Gemini Flash 1.5 8B", value: "google/gemini-flash-1.5-8b:free", badge: "Google" },
-    { label: "Gemini Flash 1.5", value: "google/gemini-flash-1.5:free", badge: "Google" },
-    // ── Anthropic ───────────────────────────────────────────────────────────
-    { label: "Claude 3.5 Sonnet", value: "anthropic/claude-3.5-sonnet:free", badge: "Anthropic" },
-    { label: "Claude 3.5 Haiku", value: "anthropic/claude-3.5-haiku:free", badge: "Anthropic" },
-    { label: "Claude 3 Haiku", value: "anthropic/claude-3-haiku:free", badge: "Anthropic" },
-    // ── OpenAI ──────────────────────────────────────────────────────────────
-    { label: "GPT-4o", value: "openai/gpt-4o:free", badge: "OpenAI" },
-    { label: "GPT-4o Mini", value: "openai/gpt-4o-mini:free", badge: "OpenAI" },
-    { label: "o1 Mini", value: "openai/o1-mini:free", badge: "OpenAI" },
-    { label: "o3 Mini", value: "openai/o3-mini:free", badge: "OpenAI" },
-    // ── Alibaba / Qwen ──────────────────────────────────────────────────────
-    { label: "Qwen 3 235B A22B", value: "qwen/qwen3-235b-a22b:free", badge: "Alibaba" },
-    { label: "Qwen 3 30B A3B", value: "qwen/qwen3-30b-a3b:free", badge: "Alibaba" },
-    { label: "Qwen 2.5 Coder 32B", value: "qwen/qwen-2.5-coder-32b:free", badge: "Alibaba" },
-    { label: "Qwen 2.5 72B", value: "qwen/qwen-2.5-72b-instruct:free", badge: "Alibaba" },
-    { label: "Qwen 2.5 VL 72B", value: "qwen/qwen-2.5-vl-72b-instruct:free", badge: "Alibaba" },
-    // ── DeepSeek ────────────────────────────────────────────────────────────
-    { label: "DeepSeek R1", value: "deepseek/deepseek-r1:free", badge: "DeepSeek" },
-    { label: "DeepSeek V3", value: "deepseek/deepseek-chat:free", badge: "DeepSeek" },
-    { label: "DeepSeek R1 Distill 32B", value: "deepseek/deepseek-r1-distill-qwen-32b:free", badge: "DeepSeek" },
-    { label: "DeepSeek R1 Distill Llama 70B", value: "deepseek/deepseek-r1-distill-llama-70b:free", badge: "DeepSeek" },
-    { label: "DeepSeek Coder", value: "deepseek/deepseek-coder:free", badge: "DeepSeek" },
-    // ── Moonshot ────────────────────────────────────────────────────────────
-    { label: "Kimi K2", value: "moonshotai/kimi-k2:free", badge: "Moonshot" },
-    // ── Meta / Llama ────────────────────────────────────────────────────────
-    { label: "Llama 4 Scout", value: "meta-llama/llama-4-scout:free", badge: "Meta" },
-    { label: "Llama 4 Maverick", value: "meta-llama/llama-4-maverick:free", badge: "Meta" },
-    { label: "Llama 3.3 70B", value: "meta-llama/llama-3.3-70b-instruct:free", badge: "Meta" },
-    { label: "Llama 3.1 70B", value: "meta-llama/llama-3.1-70b-instruct:free", badge: "Meta" },
-    { label: "Llama 3.1 8B", value: "meta-llama/llama-3.1-8b-instruct:free", badge: "Meta" },
-    // ── NousResearch ────────────────────────────────────────────────────────
-    { label: "Hermes 3 70B", value: "nousresearch/hermes-3-llama-3.1-70b:free", badge: "NousResearch" },
-    { label: "Hermes 3 405B", value: "nousresearch/hermes-3-llama-3.1-405b:free", badge: "NousResearch" },
-    // ── Mistral ─────────────────────────────────────────────────────────────
-    { label: "Pixtral Large", value: "mistralai/pixtral-large-2411:free", badge: "Mistral" },
-    { label: "Mistral Small", value: "mistralai/mistral-small:free", badge: "Mistral" },
-    { label: "Mistral Nemo", value: "mistralai/mistral-nemo:free", badge: "Mistral" },
-    { label: "Mistral 7B", value: "mistralai/mistral-7b-instruct:free", badge: "Mistral" },
-    { label: "Mixtral 8x7B", value: "mistralai/mixtral-8x7b-instruct:free", badge: "Mistral" },
-    // ── Microsoft ───────────────────────────────────────────────────────────
-    { label: "Phi-4", value: "microsoft/phi-4:free", badge: "Microsoft" },
-    { label: "Phi-3 Medium 128K", value: "microsoft/phi-3-medium-128k-instruct:free", badge: "Microsoft" },
-    { label: "Phi-3 Mini 128K", value: "microsoft/phi-3-mini-128k-instruct:free", badge: "Microsoft" },
-    // ── xAI ─────────────────────────────────────────────────────────────────
-    { label: "Grok 3 Mini", value: "x-ai/grok-3-mini-beta:free", badge: "xAI" },
-    { label: "Grok 2", value: "x-ai/grok-2:free", badge: "xAI" },
-    // ── NVIDIA ──────────────────────────────────────────────────────────────
-    { label: "Nemotron 70B", value: "nvidia/llama-3.1-nemotron-70b-instruct:free", badge: "NVIDIA" },
-    { label: "Nemotron Ultra 253B", value: "nvidia/llama-3.3-nemotron-super-49b-v1:free", badge: "NVIDIA" },
-    // ── THUDM ───────────────────────────────────────────────────────────────
-    { label: "GLM Z1 32B", value: "thudm/glm-z1-32b:free", badge: "THUDM" },
-    { label: "GLM-4 9B", value: "thudm/glm-4-9b:free", badge: "THUDM" },
-    // ── Cohere ──────────────────────────────────────────────────────────────
-    { label: "Command R+", value: "cohere/command-r-plus:free", badge: "Cohere" },
-    { label: "Command R", value: "cohere/command-r:free", badge: "Cohere" },
-    // ── Perplexity ──────────────────────────────────────────────────────────
-    { label: "Sonar Large Online", value: "perplexity/llama-3.1-sonar-large-128k-online:free", badge: "Perplexity" },
-    { label: "Sonar Small Online", value: "perplexity/llama-3.1-sonar-small-128k-online:free", badge: "Perplexity" },
-    // ── Groq (via OpenRouter) ────────────────────────────────────────────────
-    { label: "Llama 3.3 70B (Groq)", value: "groq/llama-3.3-70b-versatile:free", badge: "Groq" },
-    { label: "Llama 3.1 8B Instant (Groq)", value: "groq/llama-3.1-8b-instant:free", badge: "Groq" },
-    { label: "Gemma 2 9B (Groq)", value: "groq/gemma2-9b-it:free", badge: "Groq" },
-    // ── Together AI ─────────────────────────────────────────────────────────
-    { label: "Llama 3.1 405B (Together)", value: "together-ai/llama-3.1-405b:free", badge: "Together" },
-    { label: "DBRX Instruct", value: "databricks/dbrx-instruct:free", badge: "Databricks" },
-    // ── AI21 ────────────────────────────────────────────────────────────────
-    { label: "Jamba Instruct", value: "ai21/jamba-instruct:free", badge: "AI21" },
-    // ── Inflection ──────────────────────────────────────────────────────────
-    { label: "Inflection 3 Pi", value: "inflection/inflection-3-pi:free", badge: "Inflection" },
-    // ── Liquid ──────────────────────────────────────────────────────────────
-    { label: "LFM 40B MoE", value: "liquid/lfm-40b:free", badge: "Liquid" },
-    // ── 01.AI ───────────────────────────────────────────────────────────────
-    { label: "Yi Large", value: "01-ai/yi-large:free", badge: "01.AI" },
-    { label: "Yi 1.5 34B Chat", value: "01-ai/yi-1.5-34b-chat:free", badge: "01.AI" },
-    // ── Nous ────────────────────────────────────────────────────────────────
-    { label: "DeepHermes 3 Llama 8B", value: "nousresearch/deephermes-3-llama-3-8b-preview:free", badge: "Nous" },
+    { label: "🔀 Auto (أفضل نموذج تلقائياً)", value: "openrouter/free", badge: "Auto" },
+    { label: "Qwen 3.6 Plus Preview", value: "qwen/qwen3.6-plus-preview:free", badge: "Alibaba" },
+    { label: "Qwen 3 Coder 480B", value: "qwen/qwen3-coder:free", badge: "Alibaba" },
+    { label: "Qwen3 Next 80B", value: "qwen/qwen3-next-80b-a3b-instruct:free", badge: "Alibaba" },
+    { label: "NVIDIA Nemotron 120B Super", value: "nvidia/nemotron-3-super-120b-a12b:free", badge: "NVIDIA" },
+    { label: "NVIDIA Nemotron Nano 30B", value: "nvidia/nemotron-3-nano-30b-a3b:free", badge: "NVIDIA" },
+    { label: "NVIDIA Nemotron Nano 12B VL", value: "nvidia/nemotron-nano-12b-v2-vl:free", badge: "NVIDIA" },
+    { label: "NVIDIA Nemotron Nano 9B", value: "nvidia/nemotron-nano-9b-v2:free", badge: "NVIDIA" },
+    { label: "Google Gemma 3 27B", value: "google/gemma-3-27b-it:free", badge: "Google" },
+    { label: "Google Gemma 3 12B", value: "google/gemma-3-12b-it:free", badge: "Google" },
+    { label: "Google Gemma 3 4B", value: "google/gemma-3-4b-it:free", badge: "Google" },
+    { label: "Google Gemma 3n 4B", value: "google/gemma-3n-e4b-it:free", badge: "Google" },
+    { label: "Meta Llama 3.3 70B", value: "meta-llama/llama-3.3-70b-instruct:free", badge: "Meta" },
+    { label: "Meta Llama 3.2 3B", value: "meta-llama/llama-3.2-3b-instruct:free", badge: "Meta" },
+    { label: "Nous Hermes 3 405B", value: "nousresearch/hermes-3-llama-3.1-405b:free", badge: "NousResearch" },
+    { label: "MiniMax M2.5", value: "minimax/minimax-m2.5:free", badge: "MiniMax" },
+    { label: "Z.ai GLM 4.5 Air", value: "z-ai/glm-4.5-air:free", badge: "Z.ai" },
+    { label: "StepFun Step 3.5 Flash", value: "stepfun/step-3.5-flash:free", badge: "StepFun" },
+    { label: "Arcee AI Trinity Large", value: "arcee-ai/trinity-large-preview:free", badge: "Arcee AI" },
+    { label: "Arcee AI Trinity Mini", value: "arcee-ai/trinity-mini:free", badge: "Arcee AI" },
+    { label: "LiquidAI LFM2.5 Thinking", value: "liquid/lfm-2.5-1.2b-thinking:free", badge: "Liquid" },
+    { label: "LiquidAI LFM2.5 Instruct", value: "liquid/lfm-2.5-1.2b-instruct:free", badge: "Liquid" },
+    { label: "Venice Uncensored 24B", value: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free", badge: "Venice" },
   ],
 
-  DEFAULT_MODEL: "google/gemini-2.5-flash-preview:free",
+  DEFAULT_MODEL: "openrouter/free",
 
   SYSTEM_PROMPT: CODING_PROMPT,
 };
