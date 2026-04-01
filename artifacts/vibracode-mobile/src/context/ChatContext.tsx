@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { fetchEventSource } from "react-native-fetch-event-source";
 import React, {
   createContext,
   useCallback,
@@ -115,7 +116,7 @@ async function callBackendChatStream(
   signal: AbortSignal,
   onChunk: (text: string) => void
 ): Promise<void> {
-  const resp = await fetch(`${backendUrl}/chat/stream`, {
+  await fetchEventSource(`${backendUrl}/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -125,49 +126,31 @@ async function callBackendChatStream(
       openrouterKey: apiKey,
     }),
     signal,
-  });
-
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => "");
-    let msg = `Error ${resp.status}`;
-    try { msg = JSON.parse(errText)?.error ?? msg; } catch {}
-    throw new Error(msg);
-  }
-
-  const reader = resp.body?.getReader();
-  if (!reader) throw new Error("No response stream");
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let currentEvent = "chunk";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("event: ")) {
-        currentEvent = trimmed.slice(7).trim();
-      } else if (trimmed.startsWith("data: ")) {
-        const raw = trimmed.slice(6);
-        if (currentEvent === "done") return;
-        if (currentEvent === "error") {
-          try { throw new Error(JSON.parse(raw).content ?? raw); } catch (e: any) { throw e; }
-        }
-        try {
-          const parsed = JSON.parse(raw);
-          const delta = parsed.content ?? parsed.choices?.[0]?.delta?.content ?? "";
-          if (delta) onChunk(delta);
-        } catch {}
-        currentEvent = "chunk";
+    async onopen(response) {
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        let msg = `Error ${response.status}`;
+        try { msg = JSON.parse(errText)?.error ?? msg; } catch {}
+        throw new Error(msg);
       }
-    }
-  }
+    },
+    onmessage(ev) {
+      const eventType = ev.event || "chunk";
+      const raw = ev.data;
+      if (eventType === "done") return;
+      if (eventType === "error") {
+        try { throw new Error(JSON.parse(raw).content ?? raw); } catch (e: any) { throw e; }
+      }
+      try {
+        const parsed = JSON.parse(raw);
+        const delta = parsed.content ?? parsed.choices?.[0]?.delta?.content ?? "";
+        if (delta) onChunk(delta);
+      } catch {}
+    },
+    onerror(err) {
+      throw err;
+    },
+  });
 }
 
 // ── Direct OpenRouter call (fallback when no backend URL) ────────────────────
@@ -178,7 +161,7 @@ async function callOpenRouter(
   signal: AbortSignal,
   onChunk: (text: string) => void
 ): Promise<void> {
-  const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  await fetchEventSource("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -194,44 +177,29 @@ async function callOpenRouter(
       temperature: 0.7,
     }),
     signal,
-  });
-
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => "");
-    let msg = `Error ${resp.status}`;
-    try {
-      const e = JSON.parse(errText);
-      msg = e?.error?.message ?? msg;
-    } catch {}
-    throw new Error(msg);
-  }
-
-  const reader = resp.body?.getReader();
-  if (!reader) throw new Error("No response stream");
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data: ")) continue;
-      const data = trimmed.slice(6);
-      if (data === "[DONE]") return;
+    async onopen(response) {
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        let msg = `Error ${response.status}`;
+        try {
+          const e = JSON.parse(errText);
+          msg = e?.error?.message ?? msg;
+        } catch {}
+        throw new Error(msg);
+      }
+    },
+    onmessage(ev) {
+      if (ev.data === "[DONE]") return;
       try {
-        const parsed = JSON.parse(data);
+        const parsed = JSON.parse(ev.data);
         const delta = parsed.choices?.[0]?.delta?.content ?? "";
         if (delta) onChunk(delta);
       } catch {}
-    }
-  }
+    },
+    onerror(err) {
+      throw err;
+    },
+  });
 }
 
 async function callWithFallback(
@@ -276,52 +244,32 @@ async function callE2BStream(
   signal: AbortSignal,
   onEvent: (type: string, content: string) => void
 ): Promise<void> {
-  const url = `${backendUrl}/e2b/stream`;
-
-  const resp = await fetch(url, {
+  await fetchEventSource(`${backendUrl}/e2b/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, agent: e2bAgent, sessionId, openrouterKey }),
     signal,
-  });
-
-  if (!resp.ok) {
-    const txt = await resp.text().catch(() => "");
-    throw new Error(`E2B error ${resp.status}: ${txt}`);
-  }
-
-  const reader = resp.body?.getReader();
-  if (!reader) throw new Error("No stream from E2B server");
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let currentEvent = "message";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("event: ")) {
-        currentEvent = trimmed.slice(7).trim();
-      } else if (trimmed.startsWith("data: ")) {
-        const raw = trimmed.slice(6);
-        try {
-          const obj = JSON.parse(raw);
-          const content = obj.content ?? raw;
-          onEvent(currentEvent, typeof content === "string" ? content : JSON.stringify(content));
-        } catch {
-          onEvent(currentEvent, raw);
-        }
-        currentEvent = "message";
+    async onopen(response) {
+      if (!response.ok) {
+        const txt = await response.text().catch(() => "");
+        throw new Error(`E2B error ${response.status}: ${txt}`);
       }
-    }
-  }
+    },
+    onmessage(ev) {
+      const eventType = ev.event || "message";
+      const raw = ev.data;
+      try {
+        const obj = JSON.parse(raw);
+        const content = obj.content ?? raw;
+        onEvent(eventType, typeof content === "string" ? content : JSON.stringify(content));
+      } catch {
+        onEvent(eventType, raw);
+      }
+    },
+    onerror(err) {
+      throw err;
+    },
+  });
 }
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
