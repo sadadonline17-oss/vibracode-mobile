@@ -314,7 +314,7 @@ export default function ChatScreen({ tabBarHeight = 64 }: ChatScreenProps) {
       </View>
 
       {/* ── Background orb ── */}
-      <View style={[s.orbWrap, { pointerEvents: "none" } as any]}>
+      <View style={[s.orbWrap, { pointerEvents: "none" }]}>
         <AnimatedOrb size={80} />
       </View>
 
