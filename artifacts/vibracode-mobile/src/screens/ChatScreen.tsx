@@ -37,7 +37,7 @@ interface ChatScreenProps {
   tabBarHeight?: number;
 }
 
-export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
+export default function ChatScreen({ tabBarHeight = 0 }: ChatScreenProps) {
   const {
     currentSession,
     sessions,
@@ -103,10 +103,16 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
   const listRef = useRef<FlatList<Message>>(null);
   const insets = useSafeAreaInsets();
   const messages = currentSession?.messages ?? [];
-  const topPad = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
-  const hasUserMessages = messages.some((m) => m.role === "user");
 
+  // Android status bar is ~24dp, iOS notch can be 44–59dp
+  const statusBarHeight = insets.top;
+  const topBarHeight = statusBarHeight + 50;
+
+  const hasUserMessages = messages.some((m) => m.role === "user");
   const activeAgent = CONFIG.AGENTS.find((a) => a.id === selectedAgent);
+
+  // Android: keyboard behavior is 'height'; iOS: 'padding'
+  const kbBehavior = Platform.OS === "android" ? "height" : "padding";
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || isSending) return;
@@ -117,7 +123,6 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
     await sendMessage(txt);
   }, [input, isSending, sendMessage]);
 
-  // ── Real voice recording with Whisper transcription ──────────────────────
   const handleVoice = useCallback(async () => {
     if (Platform.OS === "web") {
       Alert.alert("الصوت", "إدخال الصوت متاح فقط على الأجهزة المحمولة.");
@@ -199,7 +204,6 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
     }
   }, [isRecording, recording, groqKey, getEffectiveOpenrouterKey]);
 
-  // ── Image picker with real vision support ────────────────────────────────
   const handleImagePick = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -262,16 +266,18 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
     [toggleExpanded]
   );
 
+  const bottomInset = insets.bottom;
+
   return (
     <View style={s.root}>
       {/* ── Floating TopBar ── */}
-      <View style={[s.topBar, { paddingTop: topPad + 4 }]}>
+      <View style={[s.topBar, { paddingTop: statusBarHeight + 8 }]}>
         <Pressable style={s.titleRow} onPress={() => setShowSessions(true)}>
           <Text style={s.titleText} numberOfLines={1}>
             {currentSession?.name ?? "Vibra Code"}
           </Text>
           <View style={s.chevronBtn}>
-            <Feather name="chevron-down" size={11} color="#666" />
+            <Feather name="chevron-down" size={12} color="#666" />
           </View>
         </Pressable>
         <View style={s.topRight}>
@@ -284,15 +290,24 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
             <TouchableOpacity
               style={[s.providerBadge, { borderColor: activeAgent.color + "50" }]}
               onPress={() => setShowAgent(true)}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
             >
               <View style={[s.providerDot, { backgroundColor: activeAgent.color }]} />
               <Text style={[s.providerText, { color: activeAgent.color }]}>{activeAgent.label}</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={s.iconBtn32} onPress={clearHistory}>
-            <Feather name="refresh-ccw" size={13} color="#666" />
+          <TouchableOpacity
+            style={s.iconBtn}
+            onPress={clearHistory}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Feather name="refresh-ccw" size={14} color="#666" />
           </TouchableOpacity>
-          <TouchableOpacity style={s.iconBtn32} onPress={() => setShowSettings(true)}>
+          <TouchableOpacity
+            style={s.iconBtn}
+            onPress={() => setShowSettings(true)}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
             <Feather name="settings" size={14} color="#666" />
           </TouchableOpacity>
         </View>
@@ -304,8 +319,11 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
       </View>
 
       {/* ── Main chat area ── */}
-      <KeyboardAvoidingView style={s.flex1} behavior="padding" keyboardVerticalOffset={0}>
-        {/* Messages list — fills all space, content sticks to bottom */}
+      <KeyboardAvoidingView
+        style={s.flex1}
+        behavior={kbBehavior}
+        keyboardVerticalOffset={Platform.OS === "android" ? 0 : 0}
+      >
         <FlatList
           ref={listRef}
           data={messages}
@@ -313,8 +331,7 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
           keyExtractor={(item) => item.id}
           contentContainerStyle={[
             s.listContent,
-            { paddingTop: topPad + 54 },
-            { flexGrow: 1, justifyContent: "flex-end" },
+            { paddingTop: topBarHeight + 4, flexGrow: 1, justifyContent: "flex-end" },
           ]}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
@@ -324,7 +341,7 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
         {/* ── Action Tabs ── */}
         <ActionTabs mode="chat" activeTab={activeTab} onPress={handleTabPress} />
 
-        {/* ── Suggestion Chips (above input, only when no messages) ── */}
+        {/* ── Suggestion Chips ── */}
         <SuggestionChips visible={!hasUserMessages} onSelect={(p) => setInput(p)} />
 
         {/* ── Status Banners ── */}
@@ -342,37 +359,23 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
         )}
 
         {/* ── Input Bar ── */}
-        <View style={s.inputBar}>
+        <View style={[s.inputBar, { paddingBottom: Math.max(bottomInset, 8) }]}>
+          {/* Agent selector */}
           <TouchableOpacity
             style={[s.agentBtn, activeAgent && { backgroundColor: activeAgent.color + "22" }]}
             onPress={() => setShowAgent(true)}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
             <Text style={[s.asterisk, activeAgent && { color: activeAgent.color }]}>✦</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={s.inputIconBtn} onPress={handleImagePick} disabled={isSending}>
-            <Feather name="image" size={18} color={isSending ? "#252525" : "#444"} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[s.inputIconBtn, (selectedSkillIds.length + selectedIntegIds.length) > 0 && s.skillsIconActive]}
-            onPress={() => setShowSkillsPicker(true)}
-          >
-            {(selectedSkillIds.length + selectedIntegIds.length) > 0 ? (
-              <View style={s.skillsIconBadge}>
-                <Text style={s.skillsIconBadgeTxt}>{selectedSkillIds.length + selectedIntegIds.length}</Text>
-              </View>
-            ) : (
-              <Feather name="zap" size={18} color="#444" />
-            )}
-          </TouchableOpacity>
-
+          {/* Text input */}
           <TextInput
             style={s.input}
             value={input}
             onChangeText={setInput}
             placeholder="صف تطبيقك..."
-            placeholderTextColor="#252525"
+            placeholderTextColor="#303030"
             multiline
             maxLength={4000}
             onSubmitEditing={handleSend}
@@ -380,9 +383,35 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
             blurOnSubmit={false}
           />
 
+          {/* Skills / integrations */}
+          <TouchableOpacity
+            style={[s.inputIconBtn, (selectedSkillIds.length + selectedIntegIds.length) > 0 && s.skillsIconActive]}
+            onPress={() => setShowSkillsPicker(true)}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          >
+            {(selectedSkillIds.length + selectedIntegIds.length) > 0 ? (
+              <View style={s.skillsIconBadge}>
+                <Text style={s.skillsIconBadgeTxt}>{selectedSkillIds.length + selectedIntegIds.length}</Text>
+              </View>
+            ) : (
+              <Feather name="zap" size={17} color="#444" />
+            )}
+          </TouchableOpacity>
+
+          {/* Image */}
+          <TouchableOpacity
+            style={s.inputIconBtn}
+            onPress={handleImagePick}
+            disabled={isSending}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          >
+            <Feather name="image" size={17} color={isSending ? "#252525" : "#444"} />
+          </TouchableOpacity>
+
+          {/* Send / Stop */}
           {isSending ? (
             <TouchableOpacity style={s.stopBtn} onPress={cancelMessage}>
-              <Feather name="square" size={15} color="#EF4444" />
+              <Feather name="square" size={14} color="#EF4444" />
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
@@ -394,25 +423,24 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
             </TouchableOpacity>
           )}
 
+          {/* Mic */}
           <TouchableOpacity
             style={[s.inputIconBtn, isRecording && s.recActive]}
             onPress={handleVoice}
             disabled={isTranscribing || isSending}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
             {isTranscribing ? (
               <ActivityIndicator size="small" color="#F97316" />
             ) : (
               <Feather
                 name={isRecording ? "square" : "mic"}
-                size={18}
+                size={17}
                 color={isRecording ? "#EF4444" : "#444"}
               />
             )}
           </TouchableOpacity>
         </View>
-
-        {/* Safe area bottom padding — accounts for floating tab bar */}
-        <View style={{ height: tabBarHeight }} />
       </KeyboardAvoidingView>
 
       {/* ── Modals ── */}
@@ -472,31 +500,38 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 14,
     paddingBottom: 10,
-    backgroundColor: "#080808E8",
+    backgroundColor: "#080808EE",
   },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
-  titleText: { color: "#EEE", fontSize: 15, fontWeight: "700", maxWidth: 170 },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+    paddingVertical: 4,
+  },
+  titleText: { color: "#EEE", fontSize: 15, fontWeight: "700", maxWidth: 160 },
   chevronBtn: {
-    width: 20, height: 20, borderRadius: 10,
+    width: 22, height: 22, borderRadius: 11,
     backgroundColor: "#191919",
     justifyContent: "center", alignItems: "center",
   },
-  topRight: { flexDirection: "row", alignItems: "center", gap: 7 },
+  topRight: { flexDirection: "row", alignItems: "center", gap: 6 },
   providerBadge: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 9, paddingVertical: 5,
+    paddingHorizontal: 9, paddingVertical: 6,
     borderRadius: 20, borderWidth: 1, backgroundColor: "#111",
+    minHeight: 32,
   },
   providerDot: { width: 6, height: 6, borderRadius: 3 },
   providerText: { fontSize: 10, fontWeight: "700" },
-  iconBtn32: {
-    width: 30, height: 30, borderRadius: 15,
+  iconBtn: {
+    width: 34, height: 34, borderRadius: 17,
     backgroundColor: "#141414",
     justifyContent: "center", alignItems: "center",
     borderWidth: 1, borderColor: "#1E1E1E",
   },
   skillsBadge: {
-    paddingHorizontal: 8, paddingVertical: 3,
+    paddingHorizontal: 8, paddingVertical: 4,
     borderRadius: 10, backgroundColor: "#6C47FF20",
     borderWidth: 1, borderColor: "#6C47FF40",
   },
@@ -516,7 +551,7 @@ const s = StyleSheet.create({
 
   recBanner: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 16, paddingVertical: 7,
+    paddingHorizontal: 16, paddingVertical: 8,
     backgroundColor: "#1A0808",
     borderTopWidth: 1, borderTopColor: "#EF444418",
   },
@@ -524,35 +559,40 @@ const s = StyleSheet.create({
   recText: { color: "#EF4444", fontSize: 12, fontWeight: "600" },
   transBanner: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 16, paddingVertical: 7,
+    paddingHorizontal: 16, paddingVertical: 8,
     backgroundColor: "#1A0F08",
     borderTopWidth: 1, borderTopColor: "#F9731618",
   },
   transText: { color: "#F97316", fontSize: 12, fontWeight: "600" },
 
   inputBar: {
-    flexDirection: "row", alignItems: "flex-end",
-    paddingHorizontal: 10, paddingTop: 9,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 10,
+    paddingTop: 9,
     backgroundColor: "#080808",
-    borderTopWidth: 1, borderTopColor: "#131313",
-    gap: 5,
+    borderTopWidth: 1,
+    borderTopColor: "#131313",
+    gap: 4,
   },
   agentBtn: {
-    width: 34, height: 34, borderRadius: 17,
+    width: 38, height: 38, borderRadius: 19,
     backgroundColor: "#141414",
     justifyContent: "center", alignItems: "center",
+    flexShrink: 0,
   },
-  asterisk: { color: "#F97316", fontSize: 15, fontWeight: "700", lineHeight: 19 },
+  asterisk: { color: "#F97316", fontSize: 15, fontWeight: "700", lineHeight: 20 },
   inputIconBtn: {
-    width: 34, height: 34,
+    width: 38, height: 38,
     justifyContent: "center", alignItems: "center",
+    flexShrink: 0,
   },
   recActive: {
-    backgroundColor: "#1A0808", borderRadius: 17,
+    backgroundColor: "#1A0808", borderRadius: 19,
     borderWidth: 1, borderColor: "#EF444430",
   },
   skillsIconActive: {
-    backgroundColor: "#7C3AED22", borderRadius: 17,
+    backgroundColor: "#7C3AED22", borderRadius: 19,
     borderWidth: 1, borderColor: "#7C3AED55",
   },
   skillsIconBadge: {
@@ -565,21 +605,28 @@ const s = StyleSheet.create({
     flex: 1,
     backgroundColor: "#111",
     borderRadius: 20,
-    paddingHorizontal: 14, paddingVertical: 8,
-    color: "#EEE", fontSize: 15,
-    maxHeight: 130, minHeight: 36,
-    borderWidth: 1, borderColor: "#1C1C1C",
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === "android" ? 9 : 8,
+    color: "#EEE",
+    fontSize: 15,
+    maxHeight: 130,
+    minHeight: 38,
+    borderWidth: 1,
+    borderColor: "#1C1C1C",
+    textAlignVertical: "center",
   },
   sendBtn: {
-    width: 34, height: 34, borderRadius: 17,
+    width: 38, height: 38, borderRadius: 19,
     backgroundColor: "#1C1C1C",
     justifyContent: "center", alignItems: "center",
+    flexShrink: 0,
   },
   sendBtnActive: { backgroundColor: "#6C47FF" },
   stopBtn: {
-    width: 34, height: 34, borderRadius: 17,
+    width: 38, height: 38, borderRadius: 19,
     backgroundColor: "#200808",
     borderWidth: 1, borderColor: "#EF444430",
     justifyContent: "center", alignItems: "center",
+    flexShrink: 0,
   },
 });

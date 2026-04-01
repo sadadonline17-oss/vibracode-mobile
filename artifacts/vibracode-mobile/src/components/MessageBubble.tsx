@@ -176,10 +176,16 @@ export default function MessageBubble({ item }: Props) {
   const isUser = item.role === "user";
 
   if (item.type === "status") {
+    const isWorking = !item.content || item.content.length < 3;
     return (
       <View style={s.statusRow}>
-        <ActivityIndicator size="small" color="#6C47FF" />
-        <Text style={s.statusText}>جارٍ المعالجة...</Text>
+        {isWorking
+          ? <ActivityIndicator size="small" color="#6C47FF" />
+          : <Text style={s.statusIcon}>›</Text>
+        }
+        <Text style={s.statusText} numberOfLines={2}>
+          {item.content?.trim() || "جارٍ المعالجة..."}
+        </Text>
       </View>
     );
   }
@@ -281,10 +287,13 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    padding: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     alignSelf: "flex-start",
+    maxWidth: "90%",
   },
-  statusText: { color: "#555", fontSize: 13, fontStyle: "italic" },
+  statusIcon: { color: "#6C47FF", fontSize: 16, fontWeight: "700", lineHeight: 18 },
+  statusText: { color: "#555", fontSize: 12, fontStyle: "italic", flex: 1 },
   streamDot: { marginTop: 4 },
   msgCopyBtn: {
     marginTop: 3,

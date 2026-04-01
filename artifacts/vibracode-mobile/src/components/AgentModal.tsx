@@ -181,6 +181,7 @@ const s = StyleSheet.create({
     padding: 20,
     borderTopWidth: 1,
     borderColor: "#1E1E1E",
+    maxHeight: "90%",
   },
   handle: {
     width: 36,
