@@ -1,7 +1,69 @@
 import { Router, Request, Response } from "express";
 import { Sandbox } from "e2b";
+import { ConvexHttpClient } from "convex/browser";
+import { runAgent } from "../lib/e2b/runner";
+import { AgentId } from "../lib/e2b/agents";
 
 const router = Router();
+
+const convex = new ConvexHttpClient(
+  process.env.CONVEX_URL ?? "https://astute-ladybug-398.convex.cloud"
+);
+
+// ── POST /api/e2b/generate — Convex-backed agent run (fire-and-forget) ──────
+router.post("/generate", async (req: Request, res: Response) => {
+  const { sessionId, prompt, agent = "claude" } = req.body as {
+    sessionId: string;
+    prompt: string;
+    agent: AgentId;
+  };
+
+  if (!sessionId || !prompt) {
+    res.status(400).json({ error: "sessionId + prompt required" });
+    return;
+  }
+
+  res.json({ ok: true, agent, sessionId });
+
+  const sendMsg = async (type: string, content: string) => {
+    await convex.mutation("messages:send" as any, {
+      sessionId,
+      role: "assistant",
+      type,
+      content,
+    }).catch(() => {});
+  };
+
+  const setStatus = async (status: string, sandboxId?: string) => {
+    await convex.mutation("sessions:setStatus" as any, {
+      sessionId,
+      status,
+      ...(sandboxId && { sandboxId }),
+    }).catch(() => {});
+  };
+
+  await setStatus("working");
+  await sendMsg("status", `🔄 Starting ${agent}...`);
+
+  try {
+    const { sandboxId, previewUrl } = await runAgent(
+      prompt,
+      agent,
+      async (evt) => { await sendMsg(evt.type, evt.content); }
+    );
+
+    await setStatus("done", sandboxId);
+    if (previewUrl) {
+      await convex.mutation("sessions:setPreview" as any, { sessionId, previewUrl }).catch(() => {});
+      await sendMsg("preview", previewUrl);
+    }
+    await sendMsg("status", "✅ Agent finished");
+  } catch (err: any) {
+    const msg = err?.message ?? String(err);
+    await sendMsg("error", msg);
+    await setStatus("error");
+  }
+});
 
 export type AgentType =
   | "claude-code"

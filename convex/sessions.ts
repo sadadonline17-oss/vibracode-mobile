@@ -4,60 +4,66 @@ import { v } from 'convex/values';
 export const create = mutation({
   args: {
     userId: v.string(),
-    agent: v.string(),
-    model: v.string(),
-    name: v.string(),
+    agent:  v.string(),
+    model:  v.string(),
+    name:   v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    return ctx.db.insert('sessions', {
-      userId: args.userId,
-      agent: args.agent as any,
-      model: args.model,
-      name: args.name,
-      status: 'idle',
+  handler: async (ctx, args) =>
+    ctx.db.insert('sessions', {
+      userId:    args.userId,
+      agent:     args.agent,
+      model:     args.model,
+      name:      args.name,
+      status:    'idle',
       createdAt: Date.now(),
-    });
-  },
+      updatedAt: Date.now(),
+    }),
 });
 
 export const listByUser = query({
   args: { userId: v.string() },
-  handler: async (ctx, { userId }) => {
-    return ctx.db
-      .query('sessions')
+  handler: async (ctx, { userId }) =>
+    ctx.db.query('sessions')
       .withIndex('by_user', (q) => q.eq('userId', userId))
       .order('desc')
-      .collect();
-  },
+      .take(50),
+});
+
+export const get = query({
+  args: { sessionId: v.id('sessions') },
+  handler: async (ctx, { sessionId }) => ctx.db.get(sessionId),
 });
 
 export const updateName = mutation({
   args: { sessionId: v.id('sessions'), name: v.string() },
-  handler: async (ctx, { sessionId, name }) => {
-    await ctx.db.patch(sessionId, { name });
-  },
+  handler: async (ctx, { sessionId, name }) =>
+    ctx.db.patch(sessionId, { name, updatedAt: Date.now() }),
 });
 
 export const setStatus = mutation({
   args: {
     sessionId: v.id('sessions'),
-    status: v.union(
-      v.literal('idle'),
-      v.literal('working'),
-      v.literal('done'),
-      v.literal('error')
-    ),
+    status:    v.string(),
+    sandboxId: v.optional(v.string()),
   },
-  handler: async (ctx, { sessionId, status }) => {
-    await ctx.db.patch(sessionId, { status });
-  },
+  handler: async (ctx, { sessionId, status, sandboxId }) =>
+    ctx.db.patch(sessionId, {
+      status: status as any,
+      ...(sandboxId && { sandboxId }),
+      updatedAt: Date.now(),
+    }),
 });
 
 export const setPreviewUrl = mutation({
   args: { sessionId: v.id('sessions'), previewUrl: v.string() },
-  handler: async (ctx, { sessionId, previewUrl }) => {
-    await ctx.db.patch(sessionId, { previewUrl });
-  },
+  handler: async (ctx, { sessionId, previewUrl }) =>
+    ctx.db.patch(sessionId, { previewUrl, updatedAt: Date.now() }),
+});
+
+export const setPreview = mutation({
+  args: { sessionId: v.id('sessions'), previewUrl: v.string() },
+  handler: async (ctx, { sessionId, previewUrl }) =>
+    ctx.db.patch(sessionId, { previewUrl, updatedAt: Date.now() }),
 });
 
 export const remove = mutation({
