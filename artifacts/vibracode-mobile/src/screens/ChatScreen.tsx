@@ -31,7 +31,11 @@ import { Message, useChat } from "../context/ChatContext";
 import { useSettings } from "../context/SettingsContext";
 import SettingsScreen from "./SettingsScreen";
 
-export default function ChatScreen() {
+interface ChatScreenProps {
+  tabBarHeight?: number;
+}
+
+export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
   const {
     currentSession,
     sessions,
@@ -157,7 +161,7 @@ export default function ChatScreen() {
       const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       setRecording(rec);
       setIsRecording(true);
-      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      if ((Platform.OS as string) !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch {
       Alert.alert("خطأ", "تعذر بدء التسجيل.");
     }
@@ -263,7 +267,7 @@ export default function ChatScreen() {
       </View>
 
       {/* ── Background orb ── */}
-      <View style={s.orbWrap} pointerEvents="none">
+      <View style={[s.orbWrap, { pointerEvents: "none" }]}>
         <AnimatedOrb size={80} />
       </View>
 
@@ -362,8 +366,8 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Safe area bottom padding */}
-        <View style={s.safeBottom} />
+        {/* Safe area bottom padding — accounts for floating tab bar */}
+        <View style={{ height: tabBarHeight }} />
       </KeyboardAvoidingView>
 
       {/* ── Modals ── */}
@@ -503,5 +507,4 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "#EF444430",
     justifyContent: "center", alignItems: "center",
   },
-  safeBottom: { height: Platform.OS === "ios" ? 4 : Platform.OS === "web" ? 32 : 4 },
 });

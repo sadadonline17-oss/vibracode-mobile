@@ -1,135 +1,86 @@
-# Workspace
+# Vibra Code — مساعد بناء التطبيقات بالذكاء الاصطناعي
 
-## Overview
+## نظرة عامة
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+monorepo بـ pnpm + TypeScript. تطبيق Expo/React Native لبناء تطبيقات الجوال بالذكاء الاصطناعي.
 
 ## Stack
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
+- **Monorepo**: pnpm workspaces
+- **Node.js**: 24
+- **TypeScript**: 5.9
 - **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+- **Mobile**: Expo SDK 54 + React Native 0.81
+- **Navigation**: expo-router v6
+- **AI**: OpenRouter (free models) + E2B sandboxes
+- **Build**: esbuild (API), EAS Build (APK)
 
-## Structure
+## البنية
 
 ```text
 artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   ├── api-server/         # Express API server
-│   └── vibracode-mobile/   # Vibra Code Android App (Expo/React Native)
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+├── artifacts/
+│   ├── api-server/         # Express API — يعمل على port 8080
+│   ├── vibracode-mobile/   # Expo React Native app
+│   └── mockup-sandbox/     # Canvas mockup preview (Vite)
+├── lib/
+│   ├── api-spec/           # OpenAPI spec + Orval codegen
+│   ├── api-client-react/   # React Query hooks (generated)
+│   ├── api-zod/            # Zod schemas (generated)
+│   └── db/                 # Drizzle ORM
 ```
 
-## TypeScript & Composite Projects
+## المفاتيح والتكوين
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+جميع المفاتيح مضبوطة كمتغيرات بيئة (Shared):
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+| المتغير | الوصف |
+|---------|-------|
+| `OPENROUTER_API_KEY` | OpenRouter — AI لجميع النماذج |
+| `E2B_API_KEY` | E2B Cloud Sandboxes |
+| `ANTHROPIC_API_KEY` | Claude عبر OpenRouter |
+| `CLERK_SECRET_KEY` | Clerk authentication |
+| `CONVEX_URL` | Convex cloud database |
+| `EXPO_PUBLIC_OPENROUTER_KEY` | Mobile app: OpenRouter key |
+| `EXPO_PUBLIC_CLERK_KEY` | Mobile app: Clerk key |
+| `EXPO_PUBLIC_E2B_KEY` | Mobile app: E2B key |
 
-## Root Scripts
+## بناء APK للأندرويد
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
+```bash
+# في مجلد artifacts/vibracode-mobile
+# 1. احصل على EXPO_TOKEN من expo.dev/settings/access-tokens
+# 2. ثم شغّل:
+EXPO_TOKEN=<your-token> npx eas-cli build --platform android --profile preview --non-interactive
+```
 
-## Packages
+حساب EAS:
+- Owner: `admin44aa`
+- Project ID: `b9f6c24a-7ba8-4dde-9847-00d0890a9ee3`
+- eas.json: يحتوي على profile `preview` (APK) و `production` (APK)
 
-### `artifacts/api-server` (`@workspace/api-server`)
+## النماذج المتاحة (مجانية عبر OpenRouter)
 
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
+- Gemini 2.5 Flash (Google) — الافتراضي
+- Qwen 3 235B (Alibaba)
+- DeepSeek R1
+- Kimi K2
+- Llama 4 Scout (Meta)
+- وأكثر من 40 نموذج
 
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /healthz` (full path: `/api/healthz`); `src/routes/e2b.ts` exposes `POST /api/e2b/stream` (SSE) and `POST /api/e2b/run` (batch)
-- E2B integration: supports `claude-code` (template "claude"), `codex` (template "codex"), `junie` and `openclaw` (template "base"). SSE events: `status`, `message`, `read`, `edit`, `bash`, `tasks`, `done`, `error`
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+## الشاشات
 
-### `lib/db` (`@workspace/db`)
+1. **الدردشة** — محادثة كاملة الشاشة مع AI
+2. **معاينة** — WebView لمعاينة التطبيقات المبنية
+3. **المتجر** — متجر الوكلاء AI
+4. **المهارات** — قوالب مهارات مبرمجة مسبقاً
 
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
+## الإصلاحات المطبقة (آخر تحديث)
 
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
-
-### `lib/api-spec` (`@workspace/api-spec`)
-
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `artifacts/vibracode-mobile` (`@workspace/vibracode-mobile`)
-
-**Vibra Code** — Open-Source AI App Builder for Android (Expo SDK 54 / React Native).
-Users describe apps in English → AI builds them → live preview on phone.
-
-**Architecture:**
-- `app/` — expo-router pages. `index.tsx` renders `ChatScreen`. `(tabs)/` redirects to root.
-- `src/config.ts` — all API keys and agent configs (OpenRouter models, Clerk, E2B)
-- `src/context/ChatContext.tsx` — full session management, streaming AI via OpenRouter
-- `src/screens/ChatScreen.tsx` — main chat UI (dark theme, animated orb, input bar, action tabs)
-- `src/components/` — AnimatedOrb, TasksCard, FileActionRow, MessageBubble, AgentModal, SessionsDrawer, PublishModal, ActionTabs
-
-**AI Features:**
-- Real streaming from OpenRouter (Claude 3.5, Qwen 2.5 Coder, DeepSeek, Gemini Flash, Llama)
-- **E2B Sandbox agents**: "claude" → `claude-code` template, "codex" → `codex` template (real code execution in isolated sandbox, SSE streaming via API server `/api/e2b/stream`)
-- OpenRouter agents: gemini, qwen, kimi, hermes, deepseek, llama (direct OpenRouter streaming)
-- Voice input (expo-av), Image input (expo-image-picker)
-- Task simulation flow: tasks → read files → edit files → AI response
-- AsyncStorage persistence across sessions
-- Settings screen: API key management (OpenRouter/Gemini), agent/model selector (⚙ icon in header)
-
-**Backend URL routing:**
-- Mobile constructs backend URL as `https://${EXPO_PUBLIC_DOMAIN}/api` (set in Expo workflow from `$REPLIT_DEV_DOMAIN`)
-- E2B agents call `${BACKEND_URL}/e2b/stream` — proxied to API server at port 8080
-- Routing via `E2B_AGENT_MAP` in `config.ts`: `{ claude: "claude-code", codex: "codex" }`
-
-**API Keys (stored in env vars):**
-- `EXPO_PUBLIC_OPENROUTER_KEY` — OpenRouter AI key
-- `EXPO_PUBLIC_CLERK_KEY` — Clerk auth public key
-- `EXPO_PUBLIC_E2B_KEY` — E2B sandbox key
-
-**Android APK Build:**
-- `eas.json` — EAS build profiles (development/preview/production)
-- `.github/workflows/build-apk.yml` — GitHub Actions: EAS Build (needs `EXPO_TOKEN` secret) or local Gradle fallback
-
-**Dev:** `pnpm --filter @workspace/vibracode-mobile run dev`
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+- ✅ المحادثة ممتدة على كامل الشاشة (شريط التنقل عائم)
+- ✅ إصلاح خطأ TypeScript في ChatScreen.tsx
+- ✅ إصلاح تحذير `pointerEvents` deprecated
+- ✅ إضافة جميع مفاتيح API كمتغيرات بيئة
+- ✅ ملفات `.env` للتطبيق والخادم
+- ✅ تكوين eas.json للأندرويد APK
+- ✅ التطبيق يستخدم Expo Go الحقيقي (لا محاكي)

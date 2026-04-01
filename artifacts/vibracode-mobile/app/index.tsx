@@ -29,10 +29,13 @@ export default function HomeScreen() {
   const { width } = Dimensions.get("window");
   const isTablet = width >= 768;
 
+  const bottomPad = Math.max(insets.bottom, (Platform.OS as string) === "web" ? 8 : 4);
+  const tabBarHeight = 44 + bottomPad + 8;
+
   const renderScreen = () => {
     switch (activeTab) {
       case "chat":
-        return <ChatScreen />;
+        return <ChatScreen tabBarHeight={tabBarHeight} />;
       case "preview":
         return <PreviewScreen />;
       case "marketplace":
@@ -44,14 +47,15 @@ export default function HomeScreen() {
 
   return (
     <View style={s.root}>
+      {/* Full-screen content — extends under the floating tab bar */}
       <View style={s.content}>{renderScreen()}</View>
 
-      {/* Bottom Tab Bar */}
+      {/* Floating tab bar — overlays the bottom of the screen */}
       <View
         style={[
           s.tabBar,
           {
-            paddingBottom: Math.max(insets.bottom, Platform.OS === "web" ? 8 : 4),
+            paddingBottom: bottomPad,
             paddingHorizontal: isTablet ? 60 : 0,
           },
         ]}
@@ -87,8 +91,12 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0A0A0A" },
   content: { flex: 1 },
   tabBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: "row",
-    backgroundColor: "#080808",
+    backgroundColor: "#080808EE",
     borderTopWidth: 1,
     borderTopColor: "#141414",
     paddingTop: 8,
