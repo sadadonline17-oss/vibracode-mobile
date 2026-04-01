@@ -3,46 +3,93 @@ import { Sandbox } from "e2b";
 
 const router = Router();
 
-export type AgentType = "claude-code" | "codex" | "junie" | "openclaw";
+export type AgentType =
+  | "claude-code"
+  | "opencode"
+  | "kilocode"
+  | "codex"
+  | "junie"
+  | "openclaw";
 
-// ── Official E2B Templates (from e2b.dev/docs/agents) ──────────────────────
+// ── Agent configs with real E2B sandbox templates ───────────────────────────
 const AGENT_CONFIG: Record<
   AgentType,
   {
     template: string;
-    envKey: string;
-    command: (prompt: string) => string;
+    command: (prompt: string, openrouterKey: string) => string;
   }
 > = {
+  // ── Claude Code CLI via OpenRouter ────────────────────────────────────────
+  // Uses ANTHROPIC_BASE_URL trick: claude CLI → OpenRouter API
   "claude-code": {
     template: "claude",
-    envKey: "ANTHROPIC_API_KEY",
     command: (p) =>
+      `ANTHROPIC_BASE_URL="https://openrouter.ai/api" ` +
       `claude --dangerously-skip-permissions --output-format stream-json -p "${esc(p)}"`,
   },
+
+  // ── OpenCode (opencode.ai) ────────────────────────────────────────────────
+  // Open-source terminal AI coding agent, uses OpenAI-compatible API
+  opencode: {
+    template: "base",
+    command: (p, key) =>
+      `bash -c "
+        npm install -g opencode-ai 2>/dev/null || npx --yes opencode-ai@latest --version 2>/dev/null || true;
+        export OPENAI_BASE_URL='https://openrouter.ai/api/v1';
+        export OPENAI_API_KEY='${key}';
+        export ANTHROPIC_BASE_URL='https://openrouter.ai/api';
+        export ANTHROPIC_AUTH_TOKEN='${key}';
+        mkdir -p /home/user/project;
+        cd /home/user/project;
+        if command -v opencode &>/dev/null; then
+          opencode run '${esc(p)}' --model openrouter/free 2>&1;
+        else
+          npx opencode-ai run '${esc(p)}' --model openrouter/free 2>&1 || \\
+          claude --dangerously-skip-permissions -p '${esc(p)}' 2>&1;
+        fi
+      "`,
+  },
+
+  // ── Kilo Code (kilocode.dev) ──────────────────────────────────────────────
+  // Uses Claude CLI with Kilo Code system prompt style + OpenRouter
+  kilocode: {
+    template: "claude",
+    command: (p, key) =>
+      `ANTHROPIC_BASE_URL="https://openrouter.ai/api" ` +
+      `ANTHROPIC_AUTH_TOKEN="${key}" ` +
+      `claude --dangerously-skip-permissions --output-format stream-json -p ` +
+      `"[Kilo Code Mode] You are an expert AI coding assistant. ` +
+      `Analyze the task carefully, plan your approach, write complete production-ready code. ` +
+      `Task: ${esc(p)}"`,
+  },
+
+  // ── OpenAI Codex CLI ──────────────────────────────────────────────────────
   codex: {
     template: "codex",
-    envKey: "CODEX_API_KEY",
-    command: (p) =>
+    command: (p, key) =>
+      `OPENAI_API_KEY="${key}" ` +
+      `OPENAI_BASE_URL="https://openrouter.ai/api/v1" ` +
       `codex exec --full-auto --skip-git-repo-check --json -C /home/user/project "${esc(p)}"`,
   },
+
+  // ── Junie (JetBrains AI Agent) ────────────────────────────────────────────
   junie: {
     template: "base",
-    envKey: "JUNIE_OPENROUTER_API_KEY",
     command: (p) => `junie --headless "${esc(p)}"`,
   },
+
+  // ── OpenClaw (multi-agent) ────────────────────────────────────────────────
   openclaw: {
     template: "base",
-    envKey: "OPENROUTER_API_KEY",
     command: (p) => `openclaw run "${esc(p)}"`,
   },
 };
 
 function esc(s: string) {
-  return s.replace(/"/g, '\\"').replace(/\n/g, " ").slice(0, 2000);
+  return s.replace(/'/g, "'\\''").replace(/"/g, '\\"').replace(/\n/g, " ").slice(0, 2000);
 }
 
-// ── Output parser for each agent's JSON format ────────────────────────────
+// ── Output parsers ──────────────────────────────────────────────────────────
 type ParsedEvent = { type: string; content: string } | null;
 
 function parseClaudeCode(line: string): ParsedEvent {
@@ -50,9 +97,7 @@ function parseClaudeCode(line: string): ParsedEvent {
     const ev = JSON.parse(line);
     if (ev.type === "assistant" && ev.message?.content) {
       for (const block of ev.message.content) {
-        if (block.type === "text") {
-          return { type: "message", content: block.text };
-        }
+        if (block.type === "text") return { type: "message", content: block.text };
         if (block.type === "tool_use") {
           if (block.name === "Read")
             return { type: "read", content: block.input?.file_path ?? "" };
@@ -71,15 +116,10 @@ function parseClaudeCode(line: string): ParsedEvent {
         }
       }
     }
-    if (ev.type === "result") {
-      return {
-        type: "status",
-        content: `Done in ${ev.duration_ms ?? 0}ms`,
-      };
-    }
-    if (ev.type === "system" && ev.subtype === "init") {
+    if (ev.type === "result")
+      return { type: "status", content: `Done in ${ev.duration_ms ?? 0}ms` };
+    if (ev.type === "system" && ev.subtype === "init")
       return { type: "status", content: "Agent started" };
-    }
     return null;
   } catch {
     return line.trim() ? { type: "bash", content: line } : null;
@@ -89,20 +129,14 @@ function parseClaudeCode(line: string): ParsedEvent {
 function parseCodex(line: string): ParsedEvent {
   try {
     const ev = JSON.parse(line);
-    if (ev.type === "message") {
-      return { type: "message", content: ev.content ?? "" };
-    }
+    if (ev.type === "message") return { type: "message", content: ev.content ?? "" };
     if (ev.type === "tool_call") {
-      if (ev.name === "shell")
-        return { type: "bash", content: ev.parameters?.command ?? "" };
+      if (ev.name === "shell") return { type: "bash", content: ev.parameters?.command ?? "" };
       if (ev.name === "write_file" || ev.name === "apply_patch")
         return { type: "edit", content: ev.parameters?.path ?? "" };
-      if (ev.name === "read_file")
-        return { type: "read", content: ev.parameters?.path ?? "" };
+      if (ev.name === "read_file") return { type: "read", content: ev.parameters?.path ?? "" };
     }
-    if (ev.type === "done") {
-      return { type: "status", content: "Done" };
-    }
+    if (ev.type === "done") return { type: "status", content: "Done" };
     return null;
   } catch {
     return line.trim() ? { type: "bash", content: line } : null;
@@ -110,22 +144,22 @@ function parseCodex(line: string): ParsedEvent {
 }
 
 function parseDefault(line: string): ParsedEvent {
-  return line.trim() ? { type: "bash", content: line } : null;
+  return line.trim() ? { type: "message", content: line } : null;
 }
 
 function parseLine(line: string, agent: AgentType): ParsedEvent {
-  if (agent === "claude-code") return parseClaudeCode(line);
+  if (agent === "claude-code" || agent === "kilocode") return parseClaudeCode(line);
   if (agent === "codex") return parseCodex(line);
   return parseDefault(line);
 }
 
-// ── SSE helper ────────────────────────────────────────────────────────────
+// ── SSE helper ──────────────────────────────────────────────────────────────
 function sendSSE(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\n`);
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-// ── POST /api/e2b/stream  — SSE streaming endpoint ───────────────────────
+// ── POST /api/e2b/stream ────────────────────────────────────────────────────
 router.post("/stream", async (req: Request, res: Response) => {
   const {
     prompt,
@@ -157,7 +191,6 @@ router.post("/stream", async (req: Request, res: Response) => {
     return;
   }
 
-  // Setup SSE headers
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -169,16 +202,18 @@ router.post("/stream", async (req: Request, res: Response) => {
   let sandbox: Sandbox | null = null;
 
   try {
-    // 1. Create sandbox from official E2B template
     sandbox = await Sandbox.create(cfg.template, {
       envs: {
-        [cfg.envKey]: OPENROUTER_KEY,
-        // Claude Code needs ANTHROPIC_BASE_URL for OpenRouter
-        ...(agent === "claude-code" && {
-          ANTHROPIC_BASE_URL: "https://openrouter.ai/api",
-          ANTHROPIC_AUTH_TOKEN: OPENROUTER_KEY,
-        }),
+        // Claude Code / Kilo Code: route through OpenRouter via ANTHROPIC_BASE_URL
+        ANTHROPIC_BASE_URL: "https://openrouter.ai/api",
+        ANTHROPIC_AUTH_TOKEN: OPENROUTER_KEY,
+        ANTHROPIC_API_KEY: OPENROUTER_KEY,
+        // OpenCode / Codex: route through OpenRouter via OPENAI_BASE_URL
+        OPENAI_BASE_URL: "https://openrouter.ai/api/v1",
+        OPENAI_API_KEY: OPENROUTER_KEY,
+        // Generic OpenRouter key
         OPENROUTER_API_KEY: OPENROUTER_KEY,
+        OPENROUTER_MODEL: "openrouter/free",
       },
       apiKey: E2B_API_KEY,
       timeoutMs: 10 * 60 * 1000,
@@ -186,11 +221,9 @@ router.post("/stream", async (req: Request, res: Response) => {
 
     sendSSE(res, "status", { content: "Sandbox ready — running agent…" });
 
-    // 2. Create project directory
     await sandbox.commands.run("mkdir -p /home/user/project");
 
-    // 3. Run agent with streaming
-    const cmd = cfg.command(prompt);
+    const cmd = cfg.command(prompt, OPENROUTER_KEY);
 
     await sandbox.commands.run(cmd, {
       cwd: "/home/user/project",
@@ -201,17 +234,15 @@ router.post("/stream", async (req: Request, res: Response) => {
         }
       },
       onStderr: (data: string) => {
-        if (data.trim()) {
-          sendSSE(res, "bash", { content: data.trim() });
-        }
+        if (data.trim()) sendSSE(res, "bash", { content: data.trim() });
       },
     });
 
-    // 4. Try to get preview URL (ngrok)
+    // Check for preview URL
     try {
       const tunnel = await sandbox.commands.run(
         `curl -s http://localhost:4040/api/tunnels 2>/dev/null | ` +
-          `python3 -c "import sys,json; d=json.load(sys.stdin); print(d['tunnels'][0]['public_url'])" 2>/dev/null || echo ""`
+        `python3 -c "import sys,json; d=json.load(sys.stdin); print(d['tunnels'][0]['public_url'])" 2>/dev/null || echo ""`
       );
       if (tunnel.stdout.trim()) {
         sendSSE(res, "preview", { content: tunnel.stdout.trim() });
@@ -224,14 +255,12 @@ router.post("/stream", async (req: Request, res: Response) => {
   } catch (err: any) {
     sendSSE(res, "error", { content: err.message ?? "Unknown error" });
   } finally {
-    if (sandbox) {
-      await sandbox.kill().catch(() => {});
-    }
+    if (sandbox) await sandbox.kill().catch(() => {});
     res.end();
   }
 });
 
-// ── POST /api/e2b/run  — non-streaming (collects all messages) ────────────
+// ── POST /api/e2b/run (non-streaming) ───────────────────────────────────────
 router.post("/run", async (req: Request, res: Response) => {
   const {
     prompt,
@@ -268,11 +297,11 @@ router.post("/run", async (req: Request, res: Response) => {
   try {
     sandbox = await Sandbox.create(cfg.template, {
       envs: {
-        [cfg.envKey]: OPENROUTER_KEY,
-        ...(agent === "claude-code" && {
-          ANTHROPIC_BASE_URL: "https://openrouter.ai/api",
-          ANTHROPIC_AUTH_TOKEN: OPENROUTER_KEY,
-        }),
+        ANTHROPIC_BASE_URL: "https://openrouter.ai/api",
+        ANTHROPIC_AUTH_TOKEN: OPENROUTER_KEY,
+        ANTHROPIC_API_KEY: OPENROUTER_KEY,
+        OPENAI_BASE_URL: "https://openrouter.ai/api/v1",
+        OPENAI_API_KEY: OPENROUTER_KEY,
         OPENROUTER_API_KEY: OPENROUTER_KEY,
       },
       apiKey: E2B_API_KEY,
@@ -280,10 +309,9 @@ router.post("/run", async (req: Request, res: Response) => {
     });
 
     const messages: Array<{ type: string; content: string }> = [];
-
     await sandbox.commands.run("mkdir -p /home/user/project");
 
-    await sandbox.commands.run(cfg.command(prompt), {
+    await sandbox.commands.run(cfg.command(prompt, OPENROUTER_KEY), {
       cwd: "/home/user/project",
       onStdout: (data: string) => {
         for (const line of data.split("\n").filter(Boolean)) {

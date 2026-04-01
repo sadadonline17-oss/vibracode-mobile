@@ -1,4 +1,10 @@
 export type AgentType =
+  // ── Real E2B Sandbox Tools ──
+  | "claude"
+  | "opencode"
+  | "kilocode"
+  | "codex"
+  // ── OpenRouter Chat Models ──
   | "auto"
   | "qwen"
   | "nemotron"
@@ -13,9 +19,15 @@ export type AgentType =
   | "arcee"
   | "qwen_coder";
 
-export type ProviderType = "openrouter" | "e2b" | "groq";
+export type ProviderType = "openrouter" | "e2b";
 
-export const E2B_AGENT_MAP: Partial<Record<AgentType, string>> = {};
+// Maps agent ID → E2B agent name (sent to backend /api/e2b/stream)
+export const E2B_AGENT_MAP: Partial<Record<AgentType, string>> = {
+  claude: "claude-code",
+  opencode: "opencode",
+  kilocode: "kilocode",
+  codex: "codex",
+};
 
 export interface Agent {
   id: AgentType;
@@ -102,6 +114,61 @@ export const CONFIG = {
   PERPLEXITY_API_KEY: process.env.EXPO_PUBLIC_PERPLEXITY_KEY ?? "",
 
   AGENTS: [
+    // ════════════════════════════════════════════════════════════════
+    // ── REAL TOOLS — تعمل في صناديق حماية E2B حقيقية ──────────────
+    // ════════════════════════════════════════════════════════════════
+    {
+      id: "claude" as AgentType,
+      label: "Claude Code",
+      icon: "cpu",
+      color: "#A855F7",
+      model: "anthropic/claude-sonnet-4-5",
+      fallback: "openrouter/free",
+      description: "Claude Code CLI · صندوق E2B حقيقي · OpenRouter",
+      provider: "e2b" as ProviderType,
+      badge: "E2B · Anthropic",
+      systemPrompt: CODING_PROMPT,
+    },
+    {
+      id: "opencode" as AgentType,
+      label: "OpenCode",
+      icon: "terminal",
+      color: "#10B981",
+      model: "openrouter/free",
+      fallback: "openrouter/free",
+      description: "OpenCode AI · صندوق E2B · مفتوح المصدر",
+      provider: "e2b" as ProviderType,
+      badge: "E2B · OpenCode",
+      systemPrompt: CODING_PROMPT,
+    },
+    {
+      id: "kilocode" as AgentType,
+      label: "Kilo Code",
+      icon: "git-branch",
+      color: "#F59E0B",
+      model: "openrouter/free",
+      fallback: "openrouter/free",
+      description: "Kilo Code · صندوق E2B · متعدد النماذج",
+      provider: "e2b" as ProviderType,
+      badge: "E2B · Kilo",
+      systemPrompt: CODING_PROMPT,
+    },
+    {
+      id: "codex" as AgentType,
+      label: "Codex CLI",
+      icon: "code",
+      color: "#3B82F6",
+      model: "openrouter/free",
+      fallback: "openrouter/free",
+      description: "OpenAI Codex CLI · صندوق E2B حقيقي",
+      provider: "e2b" as ProviderType,
+      badge: "E2B · OpenAI",
+      systemPrompt: CODING_PROMPT,
+    },
+
+    // ════════════════════════════════════════════════════════════════
+    // ── CHAT MODELS — نماذج محادثة عبر OpenRouter ──────────────────
+    // ════════════════════════════════════════════════════════════════
     {
       id: "auto" as AgentType,
       label: "Auto Free",
@@ -133,7 +200,7 @@ export const CONFIG = {
       color: "#3B82F6",
       model: "qwen/qwen3.6-plus-preview:free",
       fallback: "openrouter/free",
-      description: "Qwen 3.6 Plus · متقدم ومجاني",
+      description: "Qwen 3.6 Plus Preview · متقدم",
       provider: "openrouter" as ProviderType,
       badge: "Alibaba",
       systemPrompt: CODING_PROMPT,
@@ -260,7 +327,7 @@ export const CONFIG = {
     },
   ] as Agent[],
 
-  DEFAULT_AGENT: "auto" as AgentType,
+  DEFAULT_AGENT: "claude" as AgentType,
 
   FREE_MODELS: [
     { label: "🔀 Auto (أفضل نموذج تلقائياً)", value: "openrouter/free", badge: "Auto" },
@@ -274,7 +341,6 @@ export const CONFIG = {
     { label: "Google Gemma 3 27B", value: "google/gemma-3-27b-it:free", badge: "Google" },
     { label: "Google Gemma 3 12B", value: "google/gemma-3-12b-it:free", badge: "Google" },
     { label: "Google Gemma 3 4B", value: "google/gemma-3-4b-it:free", badge: "Google" },
-    { label: "Google Gemma 3n 4B", value: "google/gemma-3n-e4b-it:free", badge: "Google" },
     { label: "Meta Llama 3.3 70B", value: "meta-llama/llama-3.3-70b-instruct:free", badge: "Meta" },
     { label: "Meta Llama 3.2 3B", value: "meta-llama/llama-3.2-3b-instruct:free", badge: "Meta" },
     { label: "Nous Hermes 3 405B", value: "nousresearch/hermes-3-llama-3.1-405b:free", badge: "NousResearch" },
@@ -284,7 +350,6 @@ export const CONFIG = {
     { label: "Arcee AI Trinity Large", value: "arcee-ai/trinity-large-preview:free", badge: "Arcee AI" },
     { label: "Arcee AI Trinity Mini", value: "arcee-ai/trinity-mini:free", badge: "Arcee AI" },
     { label: "LiquidAI LFM2.5 Thinking", value: "liquid/lfm-2.5-1.2b-thinking:free", badge: "Liquid" },
-    { label: "LiquidAI LFM2.5 Instruct", value: "liquid/lfm-2.5-1.2b-instruct:free", badge: "Liquid" },
     { label: "Venice Uncensored 24B", value: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free", badge: "Venice" },
   ],
 
