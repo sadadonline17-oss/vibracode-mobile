@@ -4,11 +4,13 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "expo start --localhost --port 8081 --no-dev",
+    "dev": "expo start --localhost --port 8081",
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "start": "expo start --localhost --port 8081"
+    "start": "expo start --localhost --port 8081 --no-dev",
+    "build:preview": "eas build --profile preview --platform android --non-interactive",
+    "build:prod": "eas build --profile production --platform android --non-interactive"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
