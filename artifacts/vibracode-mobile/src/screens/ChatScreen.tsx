@@ -443,7 +443,7 @@ export default function ChatScreen({ tabBarHeight = 64 }: ChatScreenProps) {
         </View>
 
         {/* Spacer so the input bar sits above the floating tab bar */}
-        <View style={{ height: tabBarHeight }} />
+        <View style={{ height: tabBarHeight + 16 }} />
       </KeyboardAvoidingView>
 
       {/* ── Modals ── */}
