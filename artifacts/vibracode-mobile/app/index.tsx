@@ -41,7 +41,7 @@ export default function HomeScreen() {
     <View style={s.root}>
       {/* ── Full-screen content — extends under the floating tab bar ── */}
       <View style={s.content}>{
-        activeTab === "chat"        ? <ChatScreen /> :
+        activeTab === "chat"        ? <ChatScreen tabBarHeight={tabBarHeight} /> :
         activeTab === "preview"     ? <PreviewScreen /> :
         activeTab === "marketplace" ? <MarketplaceScreen /> :
                                       <SkillsScreen />

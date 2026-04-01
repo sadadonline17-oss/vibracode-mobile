@@ -37,7 +37,7 @@ interface ChatScreenProps {
   tabBarHeight?: number;
 }
 
-export default function ChatScreen({ tabBarHeight = 0 }: ChatScreenProps) {
+export default function ChatScreen({ tabBarHeight = 64 }: ChatScreenProps) {
   const {
     currentSession,
     sessions,
@@ -441,6 +441,9 @@ export default function ChatScreen({ tabBarHeight = 0 }: ChatScreenProps) {
             )}
           </TouchableOpacity>
         </View>
+
+        {/* Spacer so the input bar sits above the floating tab bar */}
+        <View style={{ height: tabBarHeight }} />
       </KeyboardAvoidingView>
 
       {/* ── Modals ── */}
