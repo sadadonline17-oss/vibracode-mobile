@@ -85,7 +85,6 @@ function createWelcomeMessage(): Message {
   };
 }
 
-// Vision-capable models to use when an image is attached
 const VISION_MODELS = [
   "google/gemini-2.0-flash-exp:free",
   "anthropic/claude-3.5-sonnet",
@@ -185,7 +184,6 @@ async function callWithFallback(
   }
 }
 
-// ── E2B Sandbox SSE streaming ─────────────────────────────────────────────
 async function callE2BStream(
   backendUrl: string,
   prompt: string,
@@ -244,7 +242,7 @@ async function callE2BStream(
 }
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const { getEffectiveOpenrouterKey, groqKey } = useSettings();
+  const { getEffectiveOpenrouterKey } = useSettings();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<AgentType>(CONFIG.DEFAULT_AGENT);
@@ -353,7 +351,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setIsSending(false);
   }, []);
 
-  // ── Core send logic (shared between text and vision messages) ─────────
   const _doSend = useCallback(
     async (
       userContent: string,
@@ -367,7 +364,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const e2bAgentName = E2B_AGENT_MAP[selectedAgent];
       const backendUrl = CONFIG.BACKEND_URL;
 
-      // ── E2B path ──────────────────────────────────────────────────────
       if (e2bAgentName && backendUrl && !hasImage) {
         let accumulated = "";
 
@@ -477,7 +473,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           }
         );
       } else {
-        // ── OpenRouter path ─────────────────────────────────────────────
         const model = hasImage
           ? VISION_MODELS[0]
           : (agent?.model ?? selectedModel);
@@ -651,7 +646,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [currentSessionId, selectedAgent, selectedModel, sessions, isSending, activeSkills, _doSend]
   );
 
-  // ── Vision message: send image + text to a vision-capable model ────────
   const sendVisionMessage = useCallback(
     async (text: string, imageBase64: string, imageMimeType: string) => {
       if (!currentSessionId || isSending) return;
@@ -776,7 +770,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setIsSending(false);
       }
     },
-    [currentSessionId, selectedAgent, isSending, _doSend]
+    [currentSessionId, selectedAgent, isSending, sessions, _doSend]
   );
 
   return (
@@ -810,6 +804,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
 export function useChat() {
   const ctx = useContext(ChatContext);
-  if (!ctx) throw new Error("useChat must be inside ChatProvider");
+  if (!ctx) throw new Error("useChat must be used within ChatProvider");
   return ctx;
 }

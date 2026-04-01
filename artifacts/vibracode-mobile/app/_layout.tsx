@@ -13,12 +13,13 @@ import { LogBox, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { ConvexProvider, ConvexReactClient } from "convex/react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ChatProvider } from "@/src/context/ChatContext";
 import { SettingsProvider } from "@/src/context/SettingsContext";
+import { CONFIG } from "@/src/config";
 
-// Suppress known non-critical font timeout warnings
 LogBox.ignoreLogs([
   "ms timeout exceeded",
   "fontfaceobserver",
@@ -29,6 +30,9 @@ LogBox.ignoreLogs([
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+const convex = new ConvexReactClient(CONFIG.CONVEX_URL, {
+  unsavedChangesWarning: false,
+});
 
 function RootLayoutNav() {
   return (
@@ -49,7 +53,6 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Fast fallback: show app after 2s even if fonts haven't loaded
   useEffect(() => {
     timerRef.current = setTimeout(() => setReady(true), 2000);
     return () => {
@@ -57,7 +60,6 @@ export default function RootLayout() {
     };
   }, []);
 
-  // Immediately show when fonts resolve or fail
   useEffect(() => {
     if (fontsLoaded || fontError) {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -76,17 +78,19 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
-              <SettingsProvider>
-                <ChatProvider>
-                  <RootLayoutNav />
-                </ChatProvider>
-              </SettingsProvider>
-            </KeyboardProvider>
-          </GestureHandlerRootView>
-        </QueryClientProvider>
+        <ConvexProvider client={convex}>
+          <QueryClientProvider client={queryClient}>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <KeyboardProvider>
+                <SettingsProvider>
+                  <ChatProvider>
+                    <RootLayoutNav />
+                  </ChatProvider>
+                </SettingsProvider>
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+          </QueryClientProvider>
+        </ConvexProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );
