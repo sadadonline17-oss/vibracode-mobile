@@ -27,10 +27,12 @@
         "android.permission.INTERNET",
         "android.permission.CAMERA",
         "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.REQUEST_INSTALL_PACKAGES"
+        "android.permission.REQUEST_INSTALL_PACKAGES",
+        "INTERNET"
       ],
       "allowBackup": false,
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "usesCleartextTraffic": false
     },
     "ios": {
       "bundleIdentifier": "com.vibracode.app",
@@ -88,7 +90,8 @@
     "extra": {
       "eas": {
         "projectId": "b9f6c24a-7ba8-4dde-9847-00d0890a9ee3"
-      }
+      },
+      "convexUrl": "https://judicious-robin-234.convex.cloud"
     },
     "owner": "admin44aa"
   }
