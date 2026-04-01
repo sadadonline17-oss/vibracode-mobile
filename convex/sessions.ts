@@ -3,10 +3,12 @@ import { v } from 'convex/values';
 
 export const create = mutation({
   args: {
-    userId: v.string(),
-    agent:  v.string(),
-    model:  v.string(),
-    name:   v.optional(v.string()),
+    userId:   v.string(),
+    agent:    v.string(),
+    model:    v.optional(v.string()),
+    name:     v.optional(v.string()),
+    title:    v.optional(v.string()),
+    provider: v.optional(v.any()),
   },
   handler: async (ctx, args) =>
     ctx.db.insert('sessions', {
@@ -14,6 +16,8 @@ export const create = mutation({
       agent:     args.agent,
       model:     args.model,
       name:      args.name,
+      title:     args.title,
+      provider:  args.provider,
       status:    'idle',
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -24,7 +28,7 @@ export const listByUser = query({
   args: { userId: v.string() },
   handler: async (ctx, { userId }) =>
     ctx.db.query('sessions')
-      .withIndex('by_user', (q) => q.eq('userId', userId))
+      .withIndex('by_user_date', q => q.eq('userId', userId))
       .order('desc')
       .take(50),
 });
@@ -54,14 +58,11 @@ export const setStatus = mutation({
     }),
 });
 
-export const setPreviewUrl = mutation({
-  args: { sessionId: v.id('sessions'), previewUrl: v.string() },
-  handler: async (ctx, { sessionId, previewUrl }) =>
-    ctx.db.patch(sessionId, { previewUrl, updatedAt: Date.now() }),
-});
-
 export const setPreview = mutation({
-  args: { sessionId: v.id('sessions'), previewUrl: v.string() },
+  args: {
+    sessionId:  v.id('sessions'),
+    previewUrl: v.string(),
+  },
   handler: async (ctx, { sessionId, previewUrl }) =>
     ctx.db.patch(sessionId, { previewUrl, updatedAt: Date.now() }),
 });
@@ -71,9 +72,9 @@ export const remove = mutation({
   handler: async (ctx, { sessionId }) => {
     const msgs = await ctx.db
       .query('messages')
-      .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+      .withIndex('by_session', q => q.eq('sessionId', sessionId))
       .collect();
-    await Promise.all(msgs.map((m) => ctx.db.delete(m._id)));
+    await Promise.all(msgs.map(m => ctx.db.delete(m._id)));
     await ctx.db.delete(sessionId);
   },
 });

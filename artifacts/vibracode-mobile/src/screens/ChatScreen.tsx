@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,9 +21,11 @@ import ActionTabs, { ActionTabId } from "../components/ActionTabs";
 import AgentModal from "../components/AgentModal";
 import AnimatedOrb from "../components/AnimatedOrb";
 import FileActionRow from "../components/FileActionRow";
+import LivePreviewModal from "../components/LivePreviewModal";
 import MessageBubble from "../components/MessageBubble";
 import PublishModal from "../components/PublishModal";
 import SessionsDrawer from "../components/SessionsDrawer";
+import SkillsIntegrationsPicker from "../components/SkillsIntegrationsPicker";
 import SuggestionChips from "../components/SuggestionChips";
 import TasksCard from "../components/TasksCard";
 import { CONFIG } from "../config";
@@ -63,10 +65,40 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
   const [showSessions, setShowSessions] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSkillsPicker, setShowSkillsPicker] = useState(false);
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+  const [selectedIntegIds, setSelectedIntegIds] = useState<string[]>([]);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [activePreviewUrl, setActivePreviewUrl] = useState("");
   const [activeTab, setActiveTab] = useState<ActionTabId | undefined>(undefined);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
+
+  useEffect(() => {
+    const msgs = currentSession?.messages ?? [];
+    const lastMsg = msgs[msgs.length - 1];
+    if (lastMsg?.type === "preview" && lastMsg?.content?.startsWith("https://")) {
+      setActivePreviewUrl(lastMsg.content);
+      setShowPreviewModal(true);
+    }
+  }, [currentSession?.messages]);
+
+  const handleSkillToggle = useCallback((id: string) => {
+    setSelectedSkillIds(prev =>
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleIntegToggle = useCallback((id: string) => {
+    setSelectedIntegIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  }, []);
+
+  const handleApplySkills = useCallback(() => {
+    setShowSkillsPicker(false);
+  }, []);
 
   const listRef = useRef<FlatList<Message>>(null);
   const insets = useSafeAreaInsets();
@@ -322,6 +354,19 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
             <Feather name="image" size={18} color={isSending ? "#252525" : "#444"} />
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[s.inputIconBtn, (selectedSkillIds.length + selectedIntegIds.length) > 0 && s.skillsIconActive]}
+            onPress={() => setShowSkillsPicker(true)}
+          >
+            {(selectedSkillIds.length + selectedIntegIds.length) > 0 ? (
+              <View style={s.skillsIconBadge}>
+                <Text style={s.skillsIconBadgeTxt}>{selectedSkillIds.length + selectedIntegIds.length}</Text>
+              </View>
+            ) : (
+              <Feather name="zap" size={18} color="#444" />
+            )}
+          </TouchableOpacity>
+
           <TextInput
             style={s.input}
             value={input}
@@ -390,6 +435,26 @@ export default function ChatScreen({ tabBarHeight = 60 }: ChatScreenProps) {
       />
       <PublishModal visible={showPublish} onClose={() => setShowPublish(false)} />
       <SettingsScreen visible={showSettings} onClose={() => setShowSettings(false)} />
+
+      <SkillsIntegrationsPicker
+        visible={showSkillsPicker}
+        onClose={() => setShowSkillsPicker(false)}
+        selectedSkillIds={selectedSkillIds}
+        selectedIntegIds={selectedIntegIds}
+        onSkillToggle={handleSkillToggle}
+        onIntegToggle={handleIntegToggle}
+        onApply={handleApplySkills}
+        prompt={input}
+      />
+
+      {activePreviewUrl ? (
+        <LivePreviewModal
+          visible={showPreviewModal}
+          url={activePreviewUrl}
+          onClose={() => setShowPreviewModal(false)}
+          sandboxId={undefined}
+        />
+      ) : null}
     </View>
   );
 }
@@ -486,6 +551,16 @@ const s = StyleSheet.create({
     backgroundColor: "#1A0808", borderRadius: 17,
     borderWidth: 1, borderColor: "#EF444430",
   },
+  skillsIconActive: {
+    backgroundColor: "#7C3AED22", borderRadius: 17,
+    borderWidth: 1, borderColor: "#7C3AED55",
+  },
+  skillsIconBadge: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: "#7C3AED",
+    alignItems: "center", justifyContent: "center",
+  },
+  skillsIconBadgeTxt: { color: "#fff", fontSize: 10, fontWeight: "700" },
   input: {
     flex: 1,
     backgroundColor: "#111",

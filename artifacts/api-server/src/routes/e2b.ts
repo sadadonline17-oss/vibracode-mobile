@@ -3,6 +3,8 @@ import { Sandbox } from "e2b";
 import { ConvexHttpClient } from "convex/browser";
 import { runAgent } from "../lib/e2b/runner";
 import { AgentId } from "../lib/e2b/agents";
+import { ProviderConfig, BUILTIN_PROVIDERS } from "../lib/providers/registry";
+
 
 const router = Router();
 
@@ -12,11 +14,17 @@ const convex = new ConvexHttpClient(
 
 // ── POST /api/e2b/generate — Convex-backed agent run (fire-and-forget) ──────
 router.post("/generate", async (req: Request, res: Response) => {
-  const { sessionId, prompt, agent = "claude" } = req.body as {
+  const { sessionId, prompt, agent = "claude", provider: providerRaw } = req.body as {
     sessionId: string;
     prompt: string;
     agent: AgentId;
+    provider?: ProviderConfig | string;
   };
+
+  const provider: ProviderConfig | undefined =
+    typeof providerRaw === 'string'
+      ? BUILTIN_PROVIDERS[providerRaw]
+      : providerRaw;
 
   if (!sessionId || !prompt) {
     res.status(400).json({ error: "sessionId + prompt required" });
@@ -49,7 +57,8 @@ router.post("/generate", async (req: Request, res: Response) => {
     const { sandboxId, previewUrl } = await runAgent(
       prompt,
       agent,
-      async (evt) => { await sendMsg(evt.type, evt.content); }
+      async (evt) => { await sendMsg(evt.type, evt.content); },
+      provider
     );
 
     await setStatus("done", sandboxId);
