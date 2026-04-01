@@ -75,6 +75,24 @@ EXPO_TOKEN=<your-token> npx eas-cli build --platform android --profile preview -
 3. **المتجر** — متجر الوكلاء AI
 4. **المهارات** — قوالب مهارات مبرمجة مسبقاً
 
+## الوكلاء المدعومون (E2B Sandboxes)
+
+| الوكيل | القالب | الوصف |
+|--------|--------|-------|
+| `claude` | `claude` | Claude Code CLI عبر OpenRouter |
+| `opencode` | `base` | OpenCode AI مفتوح المصدر |
+| `kilocode` | `claude` | Kilo Code بأسلوب Claude |
+| `codex` | `codex` | OpenAI Codex CLI |
+| `amp` | `amp` | Amp Agent من Anthropic |
+| `junie` | `base` | Junie من JetBrains |
+| `openclaw` | `base` | OpenClaw متعدد العملاء |
+
+## Convex — قاعدة البيانات الفورية
+
+- URL: `https://astute-ladybug-398.convex.cloud`
+- Deployment: `dev:astute-ladybug-398`
+- يدعم sessions + messages مع fallback تلقائي لـ AsyncStorage عند انقطاع الاتصال
+
 ## الإصلاحات المطبقة (آخر تحديث)
 
 - ✅ المحادثة ممتدة على كامل الشاشة (شريط التنقل عائم)
@@ -84,3 +102,8 @@ EXPO_TOKEN=<your-token> npx eas-cli build --platform android --profile preview -
 - ✅ ملفات `.env` للتطبيق والخادم
 - ✅ تكوين eas.json للأندرويد APK
 - ✅ التطبيق يستخدم Expo Go الحقيقي (لا محاكي)
+- ✅ إضافة وكلاء E2B جدد: amp, junie, openclaw
+- ✅ تحديث Convex schema لدعم أنواع رسائل جديدة (tasks_card, read_file, edit_file, preview, error)
+- ✅ تحديث Convex schema ليستخدم v.string() لحقل agent (مرونة أكبر)
+- ✅ إصلاح معالجة أحداث SSE الجديدة في ChatContext و ConvexChatProvider
+- ✅ ضبط متغيرات البيئة: OPENROUTER_API_KEY, E2B_API_KEY, CONVEX_URL, CONVEX_DEPLOYMENT, ANTHROPIC_API_KEY

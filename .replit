@@ -45,3 +45,4 @@ JUNIE_OPENROUTER_API_KEY = "sk-or-v1-209901b72b27cf09defa141e0fa3aa1cf2d23ad8c72
 CONVEX_DEPLOYMENT = "dev:astute-ladybug-398"
 EXPO_PUBLIC_BACKEND_URL = ""
 OPENAI_BASE_URL = "https://openrouter.ai/api/v1"
+EXPO_PUBLIC_DEFAULT_AGENT = "claude"

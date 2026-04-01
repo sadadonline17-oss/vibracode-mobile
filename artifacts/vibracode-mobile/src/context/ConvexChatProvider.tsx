@@ -406,15 +406,15 @@ export function ConvexChatProvider({ children }: { children: React.ReactNode }) 
             if (evType === "message") {
               accumulated += evContent;
               setStreamingMsg((m) => m ? { ...m, content: accumulated } : null);
-            } else if (evType === "read") {
+            } else if (evType === "read" || evType === "read_file") {
               addExtra("read", evContent);
-            } else if (evType === "edit") {
+            } else if (evType === "edit" || evType === "edit_file") {
               addExtra("edit", evContent);
             } else if (evType === "bash") {
               addExtra("bash", evContent);
             } else if (evType === "status") {
               setStreamingMsg((m) => m && !accumulated ? { ...m, content: `⚙ ${evContent}` } : m);
-            } else if (evType === "tasks") {
+            } else if (evType === "tasks" || evType === "tasks_card") {
               try {
                 const taskData = JSON.parse(evContent);
                 const taskItems: TaskItem[] = Array.isArray(taskData)
@@ -425,6 +425,8 @@ export function ConvexChatProvider({ children }: { children: React.ReactNode }) 
                   : [];
                 addExtra("tasks", JSON.stringify(taskItems));
               } catch {}
+            } else if (evType === "preview") {
+              addExtra("message", `🔗 Preview: ${evContent}`);
             } else if (evType === "error") {
               accumulated = `⚠️ ${evContent}`;
               setStreamingMsg((m) => m ? { ...m, content: accumulated } : null);

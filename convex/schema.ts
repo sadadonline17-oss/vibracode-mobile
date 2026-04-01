@@ -5,27 +5,10 @@ export default defineSchema({
   sessions: defineTable({
     userId: v.string(),
     title: v.optional(v.string()),
-    agent: v.union(
-      v.literal('claude'),
-      v.literal('opencode'),
-      v.literal('kilocode'),
-      v.literal('codex'),
-      v.literal('auto'),
-      v.literal('qwen'),
-      v.literal('nemotron'),
-      v.literal('gemma'),
-      v.literal('hermes'),
-      v.literal('llama'),
-      v.literal('minimax'),
-      v.literal('glm'),
-      v.literal('qwen_next'),
-      v.literal('nvidia_nano'),
-      v.literal('stepfun'),
-      v.literal('arcee'),
-      v.literal('qwen_coder')
-    ),
+    agent: v.string(),
     model: v.string(),
     previewUrl: v.optional(v.string()),
+    sandboxId: v.optional(v.string()),
     status: v.union(
       v.literal('idle'),
       v.literal('working'),
@@ -34,6 +17,7 @@ export default defineSchema({
     ),
     name: v.string(),
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
   }).index('by_user', ['userId']),
 
   messages: defineTable({
@@ -45,7 +29,12 @@ export default defineSchema({
       v.literal('edit'),
       v.literal('bash'),
       v.literal('tasks'),
-      v.literal('status')
+      v.literal('tasks_card'),
+      v.literal('read_file'),
+      v.literal('edit_file'),
+      v.literal('status'),
+      v.literal('preview'),
+      v.literal('error')
     ),
     content: v.string(),
     metadata: v.optional(v.any()),

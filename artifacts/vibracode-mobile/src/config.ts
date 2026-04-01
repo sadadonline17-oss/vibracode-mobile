@@ -4,6 +4,9 @@ export type AgentType =
   | "opencode"
   | "kilocode"
   | "codex"
+  | "amp"
+  | "junie"
+  | "openclaw"
   // ── OpenRouter Chat Models ──
   | "auto"
   | "qwen"
@@ -27,6 +30,9 @@ export const E2B_AGENT_MAP: Partial<Record<AgentType, string>> = {
   opencode: "opencode",
   kilocode: "kilocode",
   codex: "codex",
+  amp: "amp",
+  junie: "junie",
+  openclaw: "openclaw",
 };
 
 export interface Agent {
@@ -165,9 +171,45 @@ export const CONFIG = {
       badge: "E2B · OpenAI",
       systemPrompt: CODING_PROMPT,
     },
+    {
+      id: "amp" as AgentType,
+      label: "Amp",
+      icon: "volume-2",
+      color: "#059669",
+      model: "openrouter/auto",
+      fallback: "openrouter/free",
+      description: "Amp Agent · صندوق E2B · Anthropic",
+      provider: "e2b" as ProviderType,
+      badge: "E2B · Amp",
+      systemPrompt: CODING_PROMPT,
+    },
+    {
+      id: "junie" as AgentType,
+      label: "Junie",
+      icon: "layers",
+      color: "#7C3AED",
+      model: "openrouter/auto",
+      fallback: "openrouter/free",
+      description: "Junie JetBrains · صندوق E2B · متعدد المهام",
+      provider: "e2b" as ProviderType,
+      badge: "E2B · JetBrains",
+      systemPrompt: CODING_PROMPT,
+    },
+    {
+      id: "openclaw" as AgentType,
+      label: "OpenClaw",
+      icon: "anchor",
+      color: "#EA580C",
+      model: "openrouter/auto",
+      fallback: "openrouter/free",
+      description: "OpenClaw · صندوق E2B · متعدد العملاء",
+      provider: "e2b" as ProviderType,
+      badge: "E2B · OpenClaw",
+      systemPrompt: CODING_PROMPT,
+    },
 
     // ════════════════════════════════════════════════════════════════
-    // ── CHAT MODELS — نماذج محادثة عبر OpenRouter ──────────────────
+    // ── CHAT MODELS — نماذج محادثة عبر OpenRouter ──────────════════
     // ════════════════════════════════════════════════════════════════
     {
       id: "auto" as AgentType,

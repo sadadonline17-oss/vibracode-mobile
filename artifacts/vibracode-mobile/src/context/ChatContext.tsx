@@ -414,9 +414,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     : s
                 )
               );
-            } else if (evType === "read") {
+            } else if (evType === "read" || evType === "read_file") {
               addMsg("read", evContent);
-            } else if (evType === "edit") {
+            } else if (evType === "edit" || evType === "edit_file") {
               addMsg("edit", evContent);
             } else if (evType === "bash") {
               addMsg("bash", evContent);
@@ -435,7 +435,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                     : s
                 )
               );
-            } else if (evType === "tasks") {
+            } else if (evType === "tasks" || evType === "tasks_card") {
               try {
                 const taskData = JSON.parse(evContent);
                 const taskItems = Array.isArray(taskData)
@@ -460,6 +460,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                   )
                 );
               } catch {}
+            } else if (evType === "preview") {
+              addMsg("message", `🔗 Preview: ${evContent}`);
             } else if (evType === "error") {
               accumulated = `⚠️ ${evContent}`;
               setSessions((prev) =>

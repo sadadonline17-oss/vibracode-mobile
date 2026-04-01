@@ -7,7 +7,9 @@ export type AgentType =
   | "claude-code"
   | "opencode"
   | "kilocode"
+  | "kilo-code"
   | "codex"
+  | "amp"
   | "junie"
   | "openclaw";
 
@@ -76,6 +78,27 @@ const AGENT_CONFIG: Record<
   junie: {
     template: "base",
     command: (p) => `junie --headless "${esc(p)}"`,
+  },
+
+  // ── Amp (Anthropic AI agent) ──────────────────────────────────────────────
+  amp: {
+    template: "amp",
+    command: (p, key) =>
+      `ANTHROPIC_API_KEY="${key}" ` +
+      `ANTHROPIC_BASE_URL="https://openrouter.ai/api" ` +
+      `amp --json "${esc(p)}" 2>&1 || echo '{"type":"message","content":"Amp finished"}'`,
+  },
+
+  // ── Kilo Code (alias with dash) ───────────────────────────────────────────
+  "kilo-code": {
+    template: "claude",
+    command: (p, key) =>
+      `ANTHROPIC_BASE_URL="https://openrouter.ai/api" ` +
+      `ANTHROPIC_AUTH_TOKEN="${key}" ` +
+      `claude --dangerously-skip-permissions --output-format stream-json -p ` +
+      `"[Kilo Code Mode] You are an expert AI coding assistant. ` +
+      `Analyze the task carefully, plan your approach, write complete production-ready code. ` +
+      `Task: ${esc(p)}"`,
   },
 
   // ── OpenClaw (multi-agent) ────────────────────────────────────────────────
@@ -147,9 +170,23 @@ function parseDefault(line: string): ParsedEvent {
   return line.trim() ? { type: "message", content: line } : null;
 }
 
+function parseAmp(line: string): ParsedEvent {
+  try {
+    const ev = JSON.parse(line);
+    if (ev.type === "text")    return { type: "message",   content: ev.content ?? "" };
+    if (ev.type === "command") return { type: "bash",       content: ev.command ?? "" };
+    if (ev.type === "file")    return { type: "edit",       content: ev.path ?? "" };
+    if (ev.type === "done")    return { type: "status",     content: "Done" };
+    return null;
+  } catch {
+    return line.trim() ? { type: "message", content: line } : null;
+  }
+}
+
 function parseLine(line: string, agent: AgentType): ParsedEvent {
-  if (agent === "claude-code" || agent === "kilocode") return parseClaudeCode(line);
+  if (agent === "claude-code" || agent === "kilocode" || agent === "kilo-code") return parseClaudeCode(line);
   if (agent === "codex") return parseCodex(line);
+  if (agent === "amp") return parseAmp(line);
   return parseDefault(line);
 }
 

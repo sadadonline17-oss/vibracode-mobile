@@ -22,7 +22,12 @@ export const send = mutation({
       v.literal('edit'),
       v.literal('bash'),
       v.literal('tasks'),
-      v.literal('status')
+      v.literal('tasks_card'),
+      v.literal('read_file'),
+      v.literal('edit_file'),
+      v.literal('status'),
+      v.literal('preview'),
+      v.literal('error')
     ),
     content: v.string(),
     metadata: v.optional(v.any()),
