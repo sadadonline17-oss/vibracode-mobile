@@ -1,0 +1,14 @@
+modules = ["nodejs-22"]
+
+[nix]
+channel = "stable-24_05"
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[deployment]
+run = ["sh", "-c", "pnpm expo start --localhost --port 8081 --no-dev"]
+
+[env]
+PORT = "8081"
