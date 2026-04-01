@@ -55,7 +55,7 @@ export default function RootLayout() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    timerRef.current = setTimeout(() => setReady(true), 2000);
+    timerRef.current = setTimeout(() => setReady(true), 300);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
