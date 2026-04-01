@@ -210,7 +210,7 @@ export default function ChatScreen({ tabBarHeight = 64 }: ChatScreenProps) {
         quality: 0.8,
         base64: true,
         allowsEditing: false,
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
       });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
@@ -314,7 +314,7 @@ export default function ChatScreen({ tabBarHeight = 64 }: ChatScreenProps) {
       </View>
 
       {/* ── Background orb ── */}
-      <View style={[s.orbWrap, { pointerEvents: "none" }]}>
+      <View style={[s.orbWrap, { pointerEvents: "none" } as any]}>
         <AnimatedOrb size={80} />
       </View>
 
