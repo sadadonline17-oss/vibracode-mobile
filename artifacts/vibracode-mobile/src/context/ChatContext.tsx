@@ -10,6 +10,8 @@ import React, {
 } from "react";
 import { AgentType, CONFIG, E2B_AGENT_MAP } from "../config";
 import { useSettings } from "./SettingsContext";
+import { detectFrustration } from "../tools/AgentLoop";
+import { terminalBridge } from "../tools/TerminalBridge";
 
 export type MessageType =
   | "message"
@@ -547,6 +549,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     async (content: string) => {
       if (!currentSessionId || !content.trim() || isSending) return;
 
+      // Frustration detection — surface a softer follow-up message when detected
+      if (detectFrustration(content)) {
+        console.log("[VibraCode] Frustration detected in user message");
+        terminalBridge.emit("⚠ Frustration detected — consider simplifying the task", "agent");
+      }
+
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -840,4 +848,10 @@ export function useChat() {
   const ctx = useContext(ChatContext);
   if (!ctx) throw new Error("useChat must be used within ChatProvider");
   return ctx;
+}
+
+// ── KAIROS proactive mode placeholder (from Claude Code architecture) ─────────
+export async function startProactiveMode(task: string): Promise<void> {
+  console.log("[KAIROS] Proactive mode initiated for task:", task);
+  terminalBridge.emit(`[KAIROS] Starting proactive agent for: ${task}`, "agent");
 }

@@ -13,14 +13,16 @@ import MarketplaceScreen from "@/src/screens/MarketplaceScreen";
 import ChatScreen from "@/src/screens/ChatScreen";
 import SkillsScreen from "@/src/screens/SkillsScreen";
 import PreviewScreen from "@/src/screens/PreviewScreen";
+import TerminalScreen from "@/src/screens/TerminalScreen";
 
-type TabId = "chat" | "preview" | "marketplace" | "skills";
+type TabId = "chat" | "preview" | "marketplace" | "skills" | "terminal";
 
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: "chat",        label: "الدردشة",  icon: "message-circle" },
   { id: "preview",     label: "معاينة",   icon: "monitor" },
   { id: "marketplace", label: "المتجر",   icon: "shopping-bag" },
   { id: "skills",      label: "المهارات", icon: "zap" },
+  { id: "terminal",    label: "تيرمنال",  icon: "terminal" },
 ];
 
 // Android minimum touch target: 48dp
@@ -44,6 +46,7 @@ export default function HomeScreen() {
         activeTab === "chat"        ? <ChatScreen tabBarHeight={tabBarHeight} /> :
         activeTab === "preview"     ? <PreviewScreen /> :
         activeTab === "marketplace" ? <MarketplaceScreen /> :
+        activeTab === "terminal"    ? <TerminalScreen /> :
                                       <SkillsScreen />
       }</View>
 
