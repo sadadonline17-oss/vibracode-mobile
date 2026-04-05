@@ -10,11 +10,22 @@
       "android": { "buildType": "apk" },
       "node": "20.0.0",
       "env": {
-        "EXPO_PUBLIC_CONVEX_URL": "https://judicious-robin-234.convex.cloud"
+        "EXPO_PUBLIC_CONVEX_URL": "https://judicious-robin-234.convex.cloud",
+        "EXPO_PUBLIC_OPENROUTER_KEY": "",
+        "EXPO_PUBLIC_E2B_KEY": "",
+        "EXPO_PUBLIC_GEMINI_KEY": "",
+        "EXPO_PUBLIC_ANTHROPIC_KEY": "",
+        "EXPO_PUBLIC_OPENAI_KEY": ""
       }
     },
     "production": {
-      "android": { "buildType": "app-bundle" }
+      "android": { "buildType": "app-bundle" },
+      "node": "20.0.0",
+      "env": {
+        "EXPO_PUBLIC_CONVEX_URL": "https://judicious-robin-234.convex.cloud",
+        "EXPO_PUBLIC_OPENROUTER_KEY": "",
+        "EXPO_PUBLIC_E2B_KEY": ""
+      }
     }
   },
   "submit": {
