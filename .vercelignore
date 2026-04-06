@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts
+artifacts/vibracode-mobile/static-build/
+artifacts/vibracode-mobile/.expo/
+artifacts/vibracode-mobile/.metro-cache/
+dist/
+
+# Replit-specific
+.replit/
+.replitignore
+.replit-artifact/
+**/.replit-artifact/
+
+# IDE / editor
+.claude/
+.vscode/
+.idea/
+
+# Git
+.git/
+.github/
+
+# Misc
+*.md
+.gitignore
+.npmrc
+replit.md
+attached_assets/
+e2b-template/
+scripts/

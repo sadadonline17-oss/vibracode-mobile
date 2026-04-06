@@ -5,131 +5,232 @@ import {
   StyleSheet,
   Text,
   View,
+  ScrollView,
+  TextInput,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import WebView from "react-native-webview";
 import { CONFIG } from "../config";
 import { terminalBridge } from "../tools/TerminalBridge";
+import { Feather } from "@expo/vector-icons";
 
-// ── xterm.js HTML bundle (loaded offline, no CDN required at runtime) ─────────
-const TERMINAL_HTML = `<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.3.0/lib/xterm.js"></script>
-  <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.3.0/css/xterm.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    html,body{background:#0d1117;height:100%;overflow:hidden}
-    #t{width:100%;height:100vh}
-  </style>
-</head>
-<body>
-  <div id="t"></div>
-  <script>
-    const term = new Terminal({
-      theme:{
-        background:'#0d1117',foreground:'#c9d1d9',
-        cursor:'#58a6ff',selectionBackground:'rgba(88,166,255,0.3)',
-        black:'#484f58',red:'#ff7b72',green:'#3fb950',
-        yellow:'#d29922',blue:'#58a6ff',magenta:'#d2a8ff',
-        cyan:'#76e3ea',white:'#b1bac4'
-      },
-      fontSize:13,fontFamily:"'JetBrains Mono','Fira Code',monospace",
-      cursorBlink:true,allowTransparency:true,scrollback:2000
-    });
-    const fit = new FitAddon.FitAddon();
-    term.loadAddon(fit);
-    term.open(document.getElementById('t'));
-    fit.fit();
+// Built-in commands that work without backend
+const BUILTIN_COMMANDS: Record<string, () => string> = {
+  help: () =>
+    `VibraCode Terminal v2.0 - Built-in Commands:
+  help        - Show this help message
+  clear       - Clear terminal output
+  about       - About VibraCode
+  agents      - List available AI agents
+  models      - List available AI models
+  env         - Show environment config
+  version     - Show app version
 
-    let line='',history=[],hIdx=-1,prompt='\\x1b[32m$ \\x1b[0m';
+Remote commands require a backend URL.
+Set EXPO_PUBLIC_BACKEND_URL to enable.`,
 
-    function writePrompt(){term.write('\\r\\n'+prompt);}
+  clear: () => "__CLEAR__",
 
-    term.write('\\x1b[1;34m╔══════════════════════════╗\\x1b[0m\\r\\n');
-    term.write('\\x1b[1;34m║  VibraCode Terminal 1.0  ║\\x1b[0m\\r\\n');
-    term.write('\\x1b[1;34m╚══════════════════════════╝\\x1b[0m\\r\\n');
-    writePrompt();
+  about: () =>
+    `VibraCode v1.0.2
+AI-powered mobile app builder
+Build React Native / Expo apps with AI assistance
+7 E2B Sandbox Agents + 12 AI Chat Models
+https://vibracode-mobile.vercel.app`,
 
-    term.onKey(({key,domEvent})=>{
-      const k=domEvent.keyCode;
-      if(k===13){
-        const cmd=line.trim();
-        if(cmd){history.unshift(cmd);hIdx=-1;window.ReactNativeWebView.postMessage(JSON.stringify({type:'command',command:cmd}));}
-        line='';
-      } else if(k===8){
-        if(line.length>0){line=line.slice(0,-1);term.write('\\b \\b');}
-      } else if(k===38){
-        if(hIdx<history.length-1){hIdx++;const c=history[hIdx];term.write('\\r\\x1b[K'+prompt+c);line=c;}
-      } else if(k===40){
-        if(hIdx>0){hIdx--;const c=history[hIdx];term.write('\\r\\x1b[K'+prompt+c);line=c;}
-        else if(hIdx===0){hIdx=-1;term.write('\\r\\x1b[K'+prompt);line='';}
-      } else {
-        line+=key;term.write(key);
-      }
-    });
+  version: () => `VibraCode v1.0.2 (build 3)`,
 
-    window.receiveOutput=function(d){term.write('\\r\\n'+d.replace(/\\n/g,'\\r\\n'));writePrompt();};
-    window.receiveError=function(d){term.write('\\r\\n\\x1b[31m'+d.replace(/\\n/g,'\\r\\n')+'\\x1b[0m');writePrompt();};
-    window.receiveAgent=function(d){term.write('\\r\\n\\x1b[33m🤖 '+d.replace(/\\n/g,'\\r\\n')+'\\x1b[0m');writePrompt();};
-    window.clearTerm=function(){term.clear();writePrompt();};
-    window.addEventListener('resize',()=>fit.fit());
-  </script>
-</body>
-</html>`;
+  agents: () => {
+    const agents = CONFIG.AGENTS.filter((a) => a.provider === "e2b");
+    return `Available E2B Sandbox Agents:\n${agents
+      .map((a) => `  ● ${a.label} (${a.id}) - ${a.description}`)
+      .join("\n")}`;
+  },
+
+  models: () => {
+    const models = CONFIG.AGENTS.filter((a) => a.provider === "openrouter");
+    return `Available Chat Models:\n${models
+      .map((a) => `  ● ${a.label} - ${a.model}`)
+      .join("\n")}`;
+  },
+
+  env: () => {
+    const hasBackend = !!CONFIG.BACKEND_URL;
+    const hasOpenRouter = !!CONFIG.OPENROUTER_API_KEY;
+    const hasConvex = !!CONFIG.CONVEX_URL;
+    const hasE2B = !!CONFIG.E2B_API_KEY;
+    return `Environment Configuration:
+  Backend URL:    ${hasBackend ? CONFIG.BACKEND_URL : "not set"}
+  OpenRouter Key: ${hasOpenRouter ? "***" + CONFIG.OPENROUTER_API_KEY.slice(-6) : "not set"}
+  Convex URL:     ${hasConvex ? CONFIG.CONVEX_URL : "not set"}
+  E2B Key:        ${hasE2B ? "***" + CONFIG.E2B_API_KEY.slice(-6) : "not set"}
+  Platform:       ${Platform.OS}
+  Architecture:   ${Platform.OS === "android" ? "Android" : Platform.OS === "ios" ? "iOS" : "Web"}`;
+  },
+};
+
+interface TerminalLine {
+  id: string;
+  type: "input" | "output" | "error" | "info" | "agent";
+  content: string;
+}
 
 export default function TerminalScreen() {
-  const webRef = useRef<WebView>(null);
-  const [connected, setConnected] = useState(false);
+  const [lines, setLines] = useState<TerminalLine[]>([
+    {
+      id: "0",
+      type: "info",
+      content: "╔══════════════════════════╗\n║  VibraCode Terminal v2.0  ║\n╚══════════════════════════╝",
+    },
+    {
+      id: "1",
+      type: "info",
+      content: `Type 'help' for available commands.\nMode: ${CONFIG.BACKEND_URL ? "☁️ Cloud Connected" : "📦 Local Mode"}`,
+    },
+  ]);
+  const [input, setInput] = useState("");
   const [executing, setExecuting] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIdx, setHistoryIdx] = useState(-1);
+
+  const scrollRef = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
 
   const backendUrl = (CONFIG.BACKEND_URL || "").replace(/\/$/, "");
+  const isCloud = !!backendUrl;
 
-  const injectOutput = useCallback((js: string) => {
-    webRef.current?.injectJavaScript(`${js}; true;`);
-  }, []);
+  const addLine = useCallback(
+    (type: TerminalLine["type"], content: string) => {
+      const id = Date.now().toString() + Math.random().toString(36).substr(2, 4);
+      setLines((prev) => [...prev, { id, type, content }]);
+    },
+    []
+  );
 
-  // Subscribe to agent tool output so the terminal shows agent commands
+  // Subscribe to agent tool output
   React.useEffect(() => {
     return terminalBridge.subscribe((text, type) => {
-      const escaped = JSON.stringify(text);
-      if (type === "error") {
-        injectOutput(`window.receiveError(${escaped})`);
-      } else if (type === "agent") {
-        injectOutput(`window.receiveAgent(${escaped})`);
-      } else {
-        injectOutput(`window.receiveOutput(${escaped})`);
-      }
+      addLine(type === "error" ? "error" : type === "agent" ? "agent" : "output", text);
     });
-  }, [injectOutput]);
+  }, [addLine]);
 
   const executeCommand = useCallback(
     async (command: string) => {
-      if (!backendUrl) {
-        injectOutput(`window.receiveError("Backend not configured. Set EXPO_PUBLIC_BACKEND_URL.")`);
+      const trimmed = command.trim();
+      if (!trimmed) return;
+
+      // Add to history
+      setHistory((prev) => [trimmed, ...prev.slice(0, 99)]);
+      setHistoryIdx(-1);
+
+      // Show input line
+      addLine("input", `$ ${trimmed}`);
+
+      // Check built-in commands first
+      const builtin = BUILTIN_COMMANDS[trimmed.toLowerCase()];
+      if (builtin) {
+        const result = builtin();
+        if (result === "__CLEAR__") {
+          setLines([]);
+        } else {
+          addLine("output", result);
+        }
         return;
       }
+
+      // If no backend, show error
+      if (!backendUrl) {
+        addLine(
+          "error",
+          "Backend not configured. Set EXPO_PUBLIC_BACKEND_URL to enable remote command execution.\nType 'help' for local commands."
+        );
+        return;
+      }
+
+      // Execute remote command
       setExecuting(true);
       try {
         const res = await fetch(`${backendUrl}/terminal/execute`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command, cwd: "/tmp/vibracode" }),
+          body: JSON.stringify({ command: trimmed, cwd: "/home/user" }),
         });
-        const data = (await res.json()) as { stdout: string; stderr: string; code: number };
-        if (data.stdout) injectOutput(`window.receiveOutput(${JSON.stringify(data.stdout)})`);
-        if (data.stderr) injectOutput(`window.receiveError(${JSON.stringify(data.stderr)})`);
-        if (!data.stdout && !data.stderr) injectOutput(`window.receiveOutput("")`);
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "");
+          addLine("error", `HTTP ${res.status}: ${errText}`);
+          return;
+        }
+
+        const data = (await res.json()) as {
+          stdout: string;
+          stderr: string;
+          code: number;
+        };
+
+        if (data.stdout) addLine("output", data.stdout);
+        if (data.stderr) addLine("error", data.stderr);
+        if (data.code !== 0 && !data.stdout && !data.stderr) {
+          addLine("info", `Command exited with code ${data.code}`);
+        }
+        if (!data.stdout && !data.stderr) {
+          addLine("info", "(no output)");
+        }
       } catch (err: any) {
-        injectOutput(`window.receiveError(${JSON.stringify("Connection error: " + (err?.message ?? "unknown"))})`);
+        addLine(
+          "error",
+          `Connection error: ${err?.message ?? "unknown"}\nMake sure the backend server is running.`
+        );
       } finally {
         setExecuting(false);
       }
     },
-    [backendUrl, injectOutput]
+    [backendUrl, addLine]
   );
+
+  const handleSend = useCallback(() => {
+    const cmd = input.trim();
+    setInput("");
+    if (cmd) executeCommand(cmd);
+  }, [input, executeCommand]);
+
+  const handleKeyDown = useCallback(
+    (e: any) => {
+      if (e?.nativeEvent?.key === "Enter") {
+        handleSend();
+      }
+    },
+    [handleSend]
+  );
+
+  const handleHistoryUp = useCallback(() => {
+    if (history.length === 0) return;
+    const nextIdx = Math.min(historyIdx + 1, history.length - 1);
+    setHistoryIdx(nextIdx);
+    setInput(history[nextIdx]);
+  }, [history, historyIdx]);
+
+  const handleHistoryDown = useCallback(() => {
+    if (historyIdx <= 0) {
+      setHistoryIdx(-1);
+      setInput("");
+      return;
+    }
+    const nextIdx = historyIdx - 1;
+    setHistoryIdx(nextIdx);
+    setInput(history[nextIdx]);
+  }, [history, historyIdx]);
+
+  const handleClear = useCallback(() => {
+    setLines([]);
+  }, []);
+
+  // Auto-scroll to bottom when lines change
+  React.useEffect(() => {
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, [lines]);
 
   return (
     <SafeAreaView style={s.root} edges={["top"]}>
@@ -137,44 +238,93 @@ export default function TerminalScreen() {
       <View style={s.header}>
         <View style={s.headerLeft}>
           <Text style={s.headerTitle}>⚡ Terminal</Text>
-          {executing && <Text style={s.runningText}>running…</Text>}
+          {executing && (
+            <ActivityIndicator size="small" color="#d29922" style={{ marginLeft: 8 }} />
+          )}
         </View>
         <View style={s.headerRight}>
-          <View style={[s.dot, { backgroundColor: connected ? "#3fb950" : "#484f58" }]} />
-          <Pressable
-            style={s.clearBtn}
-            onPress={() => injectOutput("window.clearTerm()")}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
+          <View style={[s.modeBadge, isCloud ? s.modeCloud : s.modeLocal]}>
+            <View style={[s.dot, { backgroundColor: isCloud ? "#3fb950" : "#d29922" }]} />
+            <Text style={[s.modeText, isCloud ? s.modeCloudText : s.modeLocalText]}>
+              {isCloud ? "Cloud" : "Local"}
+            </Text>
+          </View>
+          <Pressable style={s.clearBtn} onPress={handleClear} hitSlop={8}>
             <Text style={s.clearText}>clear</Text>
           </Pressable>
         </View>
       </View>
 
-      {/* WebView terminal */}
-      <WebView
-        ref={webRef}
-        source={{ html: TERMINAL_HTML }}
-        style={s.webview}
-        javaScriptEnabled
-        domStorageEnabled
-        originWhitelist={["*"]}
-        mixedContentMode="always"
-        allowsInlineMediaPlayback
-        onLoad={() => setConnected(true)}
-        onError={() => setConnected(false)}
-        onMessage={(e) => {
-          try {
-            const msg = JSON.parse(e.nativeEvent.data) as { type: string; command?: string };
-            if (msg.type === "command" && msg.command) {
-              executeCommand(msg.command);
-            }
-          } catch {}
-        }}
-        // Android: allow loading CDN resources
-        {...(Platform.OS === "android" ? { useWebKit: false } : {})}
-      />
+      {/* Terminal Output */}
+      <ScrollView
+        ref={scrollRef}
+        style={s.output}
+        contentContainerStyle={s.outputContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {lines.map((line) => (
+          <TerminalLineView key={line.id} line={line} />
+        ))}
+      </ScrollView>
+
+      {/* Input Bar */}
+      <View style={s.inputBar}>
+        <Text style={s.prompt}>$</Text>
+        <TextInput
+          ref={inputRef}
+          style={s.input}
+          value={input}
+          onChangeText={setInput}
+          placeholder="Type a command..."
+          placeholderTextColor="#30363d"
+          onSubmitEditing={handleSend}
+          returnKeyType="send"
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!executing}
+          selectTextOnFocus
+        />
+        <Pressable
+          style={[s.sendBtn, input.trim() && s.sendBtnActive]}
+          onPress={handleSend}
+          disabled={!input.trim() || executing}
+        >
+          <Feather name="arrow-up" size={16} color={input.trim() ? "#FFF" : "#30363d"} />
+        </Pressable>
+        <Pressable style={s.historyBtn} onPress={handleHistoryUp} hitSlop={8}>
+          <Feather name="chevron-up" size={16} color="#484f58" />
+        </Pressable>
+        <Pressable style={s.historyBtn} onPress={handleHistoryDown} hitSlop={8}>
+          <Feather name="chevron-down" size={16} color="#484f58" />
+        </Pressable>
+      </View>
     </SafeAreaView>
+  );
+}
+
+// Terminal line renderer
+function TerminalLineView({ line }: { line: TerminalLine }) {
+  const colorMap: Record<string, string> = {
+    input: "#c9d1d9",
+    output: "#8b949e",
+    error: "#ff7b72",
+    info: "#58a6ff",
+    agent: "#d29922",
+  };
+
+  return (
+    <Text
+      style={[
+        s.line,
+        { color: colorMap[line.type] || "#8b949e" },
+        line.type === "error" && s.errorLine,
+        line.type === "input" && s.inputLine,
+      ]}
+      selectable
+    >
+      {line.content}
+    </Text>
   );
 }
 
@@ -191,10 +341,29 @@ const s = StyleSheet.create({
     backgroundColor: "#161b22",
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 10 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerTitle: { color: "#58a6ff", fontWeight: "700", fontSize: 15 },
-  runningText: { color: "#d29922", fontSize: 11 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
+  modeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  modeCloud: {
+    backgroundColor: "#3fb95010",
+    borderColor: "#3fb95030",
+  },
+  modeLocal: {
+    backgroundColor: "#d2992210",
+    borderColor: "#d2992230",
+  },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  modeText: { fontSize: 10, fontWeight: "700" },
+  modeCloudText: { color: "#3fb950" },
+  modeLocalText: { color: "#d29922" },
   clearBtn: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -204,5 +373,70 @@ const s = StyleSheet.create({
     borderColor: "#30363d",
   },
   clearText: { color: "#8b949e", fontSize: 11 },
-  webview: { flex: 1, backgroundColor: "#0d1117" },
+  output: {
+    flex: 1,
+    backgroundColor: "#0d1117",
+    paddingHorizontal: 12,
+  },
+  outputContent: {
+    paddingVertical: 8,
+    flexGrow: 1,
+  },
+  line: {
+    fontSize: 13,
+    fontFamily: Platform.OS === "android" ? "monospace" : "Menlo",
+    lineHeight: 18,
+    marginBottom: 2,
+  },
+  errorLine: {
+    fontWeight: "500",
+  },
+  inputLine: {
+    fontWeight: "600",
+    color: "#c9d1d9",
+  },
+  inputBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#161b22",
+    borderTopWidth: 1,
+    borderTopColor: "#21262d",
+    gap: 8,
+  },
+  prompt: {
+    color: "#3fb950",
+    fontSize: 14,
+    fontWeight: "700",
+    fontFamily: Platform.OS === "android" ? "monospace" : "Menlo",
+  },
+  input: {
+    flex: 1,
+    color: "#c9d1d9",
+    fontSize: 13,
+    fontFamily: Platform.OS === "android" ? "monospace" : "Menlo",
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    backgroundColor: "#0d1117",
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#21262d",
+  },
+  sendBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#21262d",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sendBtnActive: { backgroundColor: "#6C47FF" },
+  historyBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 });

@@ -6,11 +6,19 @@
     "preview": {
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_CONVEX_URL": "https://judicious-robin-234.convex.cloud",
+        "EXPO_PUBLIC_BACKEND_URL": ""
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_CONVEX_URL": "https://judicious-robin-234.convex.cloud",
+        "EXPO_PUBLIC_BACKEND_URL": ""
       }
     }
   },
