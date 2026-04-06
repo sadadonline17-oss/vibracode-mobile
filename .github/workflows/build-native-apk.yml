@@ -6,9 +6,9 @@ on:
       build_type:
         description: "Build type"
         required: true
-        default: "release"
+        default: "debug"
         type: choice
-        options: [release, debug]
+        options: [debug, release]
 
 jobs:
   build-apk:
@@ -51,11 +51,12 @@ jobs:
             "ndk;27.1.12297006" \
             "cmake;3.22.1"
 
-      - name: Generate signing keystore
+      - name: Generate signing keystore for release
+        if: github.event.inputs.build_type == 'release'
         run: |
           keytool -genkeypair \
             -v \
-            -keystore /tmp/release.keystore \
+            -keystore /home/runner/work/vibracode-mobile/vibracode-mobile/artifacts/vibracode-mobile/android/app/release.keystore \
             -alias vibracode \
             -keyalg RSA \
             -keysize 2048 \
@@ -70,76 +71,54 @@ jobs:
           npx expo prebuild --platform android --clean
 
       - name: Configure release signing
+        if: github.event.inputs.build_type == 'release'
         working-directory: artifacts/vibracode-mobile/android
         run: |
-          python3 << 'PYEOF'
+          python3 -c "
           import re
-
-          with open('app/build.gradle', 'r') as f:
+          filepath = 'app/build.gradle'
+          with open(filepath, 'r') as f:
               content = f.read()
+          
+          # Find the 'signingConfigs {' block and its contents
+          # We need to add a 'release' entry inside it
+          release_signing = '''release {
+                      storeFile file('release.keystore')
+                      storePassword 'vibracode123'
+                      keyAlias 'vibracode'
+                      keyPassword 'vibracode123'
+                  }'''
 
-          # Add keystore properties loading at top of android block if not exists
-          if 'release.keystore' not in content:
-              # Find the android { block and add keystore loading after it
-              props_block = '''
-          def keystorePropertiesFile = rootProject.file("keystore.properties")
-          def keystoreProperties = new Properties()
-          if (keystorePropertiesFile.exists()) {
-              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-          }'''
-              
-              content = content.replace('android {', 'android {' + props_block, 1)
-
-          # Replace signingConfigs block
-          signing_config = '''signingConfigs {
-              release {
-                  if (keystorePropertiesFile.exists()) {
-                      storeFile file(keystoreProperties['storeFile'])
-                      storePassword keystoreProperties['storePassword']
-                      keyAlias keystoreProperties['keyAlias']
-                      keyPassword keystoreProperties['keyPassword']
-                  }
-              }
-              debug {
-                  storeFile file('debug.keystore')
-                  storePassword 'android'
-                  keyAlias 'androiddebugkey'
-                  keyPassword 'android'
-              }
-          }'''
-
-          # Replace existing signingConfigs
-          content = re.sub(
-              r'signingConfigs\s*\{[^}]*\}',
-              signing_config,
-              content,
-              flags=re.DOTALL
-          )
-
-          # Change buildTypes release to use release signing
+          # Find 'debug {' inside signingConfigs
+          debug_pattern = r'(signingConfigs\s*\{[^}]*?)(debug\s*\{[^}]*\})'
+          match = re.search(debug_pattern, content, re.DOTALL)
+          if match:
+              # Insert release before debug
+              content = content[:match.start()] + match.group(1) + release_signing + '\n            ' + match.group(2) + content[match.end():]
+              print('Inserted release signing config before debug')
+          else:
+              print('Could not find debug signing config block')
+          
+          # Now change buildTypes.release.signingConfig from debug to release
           content = content.replace(
               'signingConfig signingConfigs.debug',
               'signingConfig signingConfigs.release'
           )
-
-          with open('app/build.gradle', 'w') as f:
+          
+          with open(filepath, 'w') as f:
               f.write(content)
+          print('Done')
+          "
 
-          print("build.gradle updated successfully")
-          PYEOF
-
-          # Write keystore properties
-          cat > keystore.properties <<EOF
-          storeFile=/tmp/release.keystore
-          storePassword=vibracode123
-          keyAlias=vibracode
-          keyPassword=vibracode123
-          EOF
-
-      - name: Build APK with Gradle
+      - name: Build Debug APK
+        if: github.event.inputs.build_type != 'release'
         working-directory: artifacts/vibracode-mobile/android
-        run: |
-          ./gradlew assembleRelease --no-daemon --max-workers=2
+        run: ./gradlew assembleDebug --no-daemon --max-workers=2
+
+      - name: Build Release APK
+        if: github.event.inputs.build_type == 'release'
+        working-directory: artifacts/vibracode-mobile/android
+        run: ./gradlew assembleRelease --no-daemon --max-workers=2
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
