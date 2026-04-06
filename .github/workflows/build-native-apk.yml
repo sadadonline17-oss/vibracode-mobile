@@ -1,0 +1,136 @@
+name: Build Native Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Build type (release=signed APK, debug=debug APK)"
+        required: true
+        default: "release"
+        type: choice
+        options: [release, debug]
+  push:
+    branches: [main]
+
+jobs:
+  build-apk:
+    name: Build Native APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile || pnpm install
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager --install \
+            "build-tools;35.0.0" \
+            "platforms;android-35" \
+            "platform-tools" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
+
+      - name: Generate signing keystore
+        if: github.event.inputs.build_type == 'release' || github.event.inputs.build_type == ''
+        run: |
+          keytool -genkeypair \
+            -v \
+            -keystore /tmp/release.keystore \
+            -alias vibracode \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass vibracode123 \
+            -keypass vibracode123 \
+            -dname "CN=VibraCode, OU=Dev, O=VibraCode, L=Riyadh, ST=Riyadh, C=SA"
+
+      - name: Expo prebuild (generate native Android project)
+        working-directory: artifacts/vibracode-mobile
+        run: |
+          ENV_SUFFIX=""
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          if [ "$BUILD_TYPE" = "debug" ]; then
+            ENV_SUFFIX="--dev"
+          fi
+          npx expo prebuild --platform android --clean $ENV_SUFFIX
+
+      - name: Configure signing for release build
+        if: github.event.inputs.build_type != 'debug'
+        working-directory: artifacts/vibracode-mobile/android
+        run: |
+          # Create keystore properties file
+          cat > keystore.properties <<EOF
+          storeFile=/tmp/release.keystore
+          storePassword=vibracode123
+          keyAlias=vibracode
+          keyPassword=vibracode123
+          EOF
+          
+          # Update build.gradle to use our keystore
+          sed -i '/signingConfigs/,/}/c\        signingConfigs {\n            release {\n                storeFile file("\\/tmp\\/release.keystore")\n                storePassword "vibracode123"\n                keyAlias "vibracode"\n                keyPassword "vibracode123"\n            }\n        }' app/build.gradle
+          
+          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/g' app/build.gradle
+
+      - name: Build APK with Gradle
+        working-directory: artifacts/vibracode-mobile/android
+        run: |
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          if [ "$BUILD_TYPE" = "debug" ]; then
+            ./gradlew assembleDebug --no-daemon --max-workers=2
+          else
+            ./gradlew assembleRelease --no-daemon --max-workers=2
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VibraCode-APK
+          path: artifacts/vibracode-mobile/android/app/build/outputs/apk/**/*.apk
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.event.inputs.build_type != 'debug' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v1.0.3"
+          name: "VibraCode v1.0.3 - Native Android APK"
+          files: artifacts/vibracode-mobile/android/app/build/outputs/apk/**/*.apk
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print APK info
+        working-directory: artifacts/vibracode-mobile/android/app/build/outputs/apk
+        run: |
+          echo "==========================================="
+          echo "✅ APK BUILD SUCCESSFUL!"
+          echo "==========================================="
+          find . -name "*.apk" -exec ls -lh {} \;
+          find . -name "*.apk" -exec echo "File: {}" \;
+          echo "==========================================="
