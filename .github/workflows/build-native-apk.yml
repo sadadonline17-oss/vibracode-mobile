@@ -4,25 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       build_type:
-        description: "Build type (release=signed APK, debug=debug APK)"
+        description: "Build type"
         required: true
         default: "release"
         type: choice
         options: [release, debug]
-  push:
-    branches: [main]
 
 jobs:
   build-apk:
     name: Build Native APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
@@ -56,7 +52,6 @@ jobs:
             "cmake;3.22.1"
 
       - name: Generate signing keystore
-        if: github.event.inputs.build_type == 'release' || github.event.inputs.build_type == ''
         run: |
           keytool -genkeypair \
             -v \
@@ -72,65 +67,92 @@ jobs:
       - name: Expo prebuild (generate native Android project)
         working-directory: artifacts/vibracode-mobile
         run: |
-          ENV_SUFFIX=""
-          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
-          if [ "$BUILD_TYPE" = "debug" ]; then
-            ENV_SUFFIX="--dev"
-          fi
-          npx expo prebuild --platform android --clean $ENV_SUFFIX
+          npx expo prebuild --platform android --clean
 
-      - name: Configure signing for release build
-        if: github.event.inputs.build_type != 'debug'
+      - name: Configure release signing
         working-directory: artifacts/vibracode-mobile/android
         run: |
-          # Create keystore properties file
+          python3 << 'PYEOF'
+          import re
+
+          with open('app/build.gradle', 'r') as f:
+              content = f.read()
+
+          # Add keystore properties loading at top of android block if not exists
+          if 'release.keystore' not in content:
+              # Find the android { block and add keystore loading after it
+              props_block = '''
+          def keystorePropertiesFile = rootProject.file("keystore.properties")
+          def keystoreProperties = new Properties()
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+          }'''
+              
+              content = content.replace('android {', 'android {' + props_block, 1)
+
+          # Replace signingConfigs block
+          signing_config = '''signingConfigs {
+              release {
+                  if (keystorePropertiesFile.exists()) {
+                      storeFile file(keystoreProperties['storeFile'])
+                      storePassword keystoreProperties['storePassword']
+                      keyAlias keystoreProperties['keyAlias']
+                      keyPassword keystoreProperties['keyPassword']
+                  }
+              }
+              debug {
+                  storeFile file('debug.keystore')
+                  storePassword 'android'
+                  keyAlias 'androiddebugkey'
+                  keyPassword 'android'
+              }
+          }'''
+
+          # Replace existing signingConfigs
+          content = re.sub(
+              r'signingConfigs\s*\{[^}]*\}',
+              signing_config,
+              content,
+              flags=re.DOTALL
+          )
+
+          # Change buildTypes release to use release signing
+          content = content.replace(
+              'signingConfig signingConfigs.debug',
+              'signingConfig signingConfigs.release'
+          )
+
+          with open('app/build.gradle', 'w') as f:
+              f.write(content)
+
+          print("build.gradle updated successfully")
+          PYEOF
+
+          # Write keystore properties
           cat > keystore.properties <<EOF
           storeFile=/tmp/release.keystore
           storePassword=vibracode123
           keyAlias=vibracode
           keyPassword=vibracode123
           EOF
-          
-          # Update build.gradle to use our keystore
-          sed -i '/signingConfigs/,/}/c\        signingConfigs {\n            release {\n                storeFile file("\\/tmp\\/release.keystore")\n                storePassword "vibracode123"\n                keyAlias "vibracode"\n                keyPassword "vibracode123"\n            }\n        }' app/build.gradle
-          
-          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/g' app/build.gradle
 
       - name: Build APK with Gradle
         working-directory: artifacts/vibracode-mobile/android
         run: |
-          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
-          if [ "$BUILD_TYPE" = "debug" ]; then
-            ./gradlew assembleDebug --no-daemon --max-workers=2
-          else
-            ./gradlew assembleRelease --no-daemon --max-workers=2
-          fi
+          ./gradlew assembleRelease --no-daemon --max-workers=2
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VibraCode-APK
+          name: VibraCode-Native-APK
           path: artifacts/vibracode-mobile/android/app/build/outputs/apk/**/*.apk
           retention-days: 30
-
-      - name: Create GitHub Release
-        if: github.event.inputs.build_type != 'debug' && github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: "v1.0.3"
-          name: "VibraCode v1.0.3 - Native Android APK"
-          files: artifacts/vibracode-mobile/android/app/build/outputs/apk/**/*.apk
-          draft: false
-          prerelease: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Print APK info
         working-directory: artifacts/vibracode-mobile/android/app/build/outputs/apk
         run: |
           echo "==========================================="
-          echo "✅ APK BUILD SUCCESSFUL!"
+          echo "APK BUILD COMPLETE"
           echo "==========================================="
           find . -name "*.apk" -exec ls -lh {} \;
-          find . -name "*.apk" -exec echo "File: {}" \;
           echo "==========================================="
