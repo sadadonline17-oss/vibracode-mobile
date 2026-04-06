@@ -5,11 +5,12 @@
   "build": {
     "preview": {
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
       },
       "env": {
         "EXPO_PUBLIC_CONVEX_URL": "https://judicious-robin-234.convex.cloud",
-        "EXPO_PUBLIC_BACKEND_URL": ""
+        "EXPO_PUBLIC_BACKEND_URL": "https://vibracode-mobile.vercel.app/api"
       }
     },
     "production": {
@@ -18,7 +19,17 @@
       },
       "env": {
         "EXPO_PUBLIC_CONVEX_URL": "https://judicious-robin-234.convex.cloud",
-        "EXPO_PUBLIC_BACKEND_URL": ""
+        "EXPO_PUBLIC_BACKEND_URL": "https://vibracode-mobile.vercel.app/api"
+      }
+    },
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_CONVEX_URL": "https://judicious-robin-234.convex.cloud"
       }
     }
   },

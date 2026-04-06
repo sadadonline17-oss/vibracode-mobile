@@ -14,20 +14,49 @@ import { CONFIG } from "../config";
 import { terminalBridge } from "../tools/TerminalBridge";
 import { Feather } from "@expo/vector-icons";
 
-// Built-in commands that work without backend
-const BUILTIN_COMMANDS: Record<string, () => string> = {
-  help: () =>
-    `VibraCode Terminal v2.0 - Built-in Commands:
-  help        - Show this help message
-  clear       - Clear terminal output
-  about       - About VibraCode
-  agents      - List available AI agents
-  models      - List available AI models
-  env         - Show environment config
-  version     - Show app version
+// Detect web platform
+const isWeb = Platform.OS === "web";
 
-Remote commands require a backend URL.
-Set EXPO_PUBLIC_BACKEND_URL to enable.`,
+// Get the API base URL for web deployment
+function getApiBaseUrl(): string {
+  if (CONFIG.BACKEND_URL) return CONFIG.BACKEND_URL;
+  if (isWeb && typeof window !== "undefined") {
+    const origin = window.location?.origin;
+    if (origin) return origin + "/api";
+  }
+  return "";
+}
+
+// Built-in commands that work without backend
+const BUILTIN_COMMANDS: Record<string, (args?: string) => string | Promise<string>> = {
+  help: () =>
+    `VibraCode Terminal v2.1 — Built-in Commands:
+  help            Show this help message
+  clear           Clear terminal output
+  about           About VibraCode
+  agents          List available AI agents
+  models          List available AI models
+  env             Show environment config
+  version         Show app version
+  echo <text>     Print text to terminal
+  date            Show current date/time
+  uname           Show system information
+  whoami          Show current user
+  pwd             Show current directory
+  ls              List files (simulated)
+  cat <name>      Show file contents (simulated)
+  calc <expr>     Calculate math expression
+  base64 <text>   Encode text to base64
+  decode64 <text> Decode base64 to text
+  json <text>     Format/prettify JSON
+  hex <text>      Convert text to hex
+  uptime          Show terminal session uptime
+  history         Show command history
+  ping <host>     Test connectivity to host
+
+Remote commands require a backend API.
+On web: API is auto-detected from the deployment URL.
+Set EXPO_PUBLIC_BACKEND_URL for custom backend.`,
 
   clear: () => "__CLEAR__",
 
@@ -38,20 +67,20 @@ Build React Native / Expo apps with AI assistance
 7 E2B Sandbox Agents + 12 AI Chat Models
 https://vibracode-mobile.vercel.app`,
 
-  version: () => `VibraCode v1.0.2 (build 3)`,
+  version: () => `VibraCode v1.0.2 (build 3) · Terminal v2.1`,
 
   agents: () => {
     const agents = CONFIG.AGENTS.filter((a) => a.provider === "e2b");
     return `Available E2B Sandbox Agents:\n${agents
       .map((a) => `  ● ${a.label} (${a.id}) - ${a.description}`)
-      .join("\n")}`;
+      .join("\n")}\n\nTotal: ${agents.length} agents`;
   },
 
   models: () => {
     const models = CONFIG.AGENTS.filter((a) => a.provider === "openrouter");
     return `Available Chat Models:\n${models
       .map((a) => `  ● ${a.label} - ${a.model}`)
-      .join("\n")}`;
+      .join("\n")}\n\nTotal: ${models.length} models`;
   },
 
   env: () => {
@@ -59,15 +88,118 @@ https://vibracode-mobile.vercel.app`,
     const hasOpenRouter = !!CONFIG.OPENROUTER_API_KEY;
     const hasConvex = !!CONFIG.CONVEX_URL;
     const hasE2B = !!CONFIG.E2B_API_KEY;
+    const apiBase = getApiBaseUrl();
     return `Environment Configuration:
-  Backend URL:    ${hasBackend ? CONFIG.BACKEND_URL : "not set"}
+  Platform:       ${Platform.OS}${isWeb ? " (Web Browser)" : " (Native)"}
+  Backend URL:    ${hasBackend ? CONFIG.BACKEND_URL : "not set (using auto-detect)"}
+  API Base:       ${apiBase || "not available"}
   OpenRouter Key: ${hasOpenRouter ? "***" + CONFIG.OPENROUTER_API_KEY.slice(-6) : "not set"}
   Convex URL:     ${hasConvex ? CONFIG.CONVEX_URL : "not set"}
   E2B Key:        ${hasE2B ? "***" + CONFIG.E2B_API_KEY.slice(-6) : "not set"}
-  Platform:       ${Platform.OS}
-  Architecture:   ${Platform.OS === "android" ? "Android" : Platform.OS === "ios" ? "iOS" : "Web"}`;
+  Screen:         ${typeof window !== "undefined" ? `${window.innerWidth}x${window.innerHeight}` : "native"}`;
+  },
+
+  date: () => new Date().toString(),
+
+  uname: () => {
+    if (isWeb) {
+      return `${navigator.userAgent}`;
+    }
+    return `VibraCode Terminal · ${Platform.OS} · ${Platform.Version}`;
+  },
+
+  whoami: () => "vibracode-user",
+
+  pwd: () => "/home/vibracode",
+
+  ls: () =>
+    `drwxr-xr-x  app.json
+drwxr-xr-x  src/
+drwxr-xr-x  components/
+drwxr-xr-x  assets/
+drwxr-xr-x  node_modules/
+-rw-r--r--  package.json
+-rw-r--r--  eas.json
+-rw-r--r--  tsconfig.json`,
+
+  uptime: () => {
+    const sessionStart = new Date();
+    const diff = Math.floor((Date.now() - sessionStart.getTime()) / 1000);
+    const mins = Math.floor(diff / 60);
+    const secs = diff % 60;
+    return `Terminal session: ${mins}m ${secs}s`;
+  },
+
+  echo: (args) => args || "",
+
+  calc: (args) => {
+    if (!args) return "Usage: calc <expression> — e.g. calc 2+2, calc Math.PI*10";
+    try {
+      // Safe eval — only allow numbers and math operators
+      const sanitized = args.replace(/[^0-9+\-*/.()%\s]/g, "");
+      if (!sanitized.trim()) return "Invalid expression";
+      const result = Function('"use strict"; return (' + sanitized + ")")();
+      return `${args} = ${result}`;
+    } catch {
+      return `Error: Invalid expression "${args}"`;
+    }
+  },
+
+  base64: (args) => {
+    if (!args) return "Usage: base64 <text>";
+    try {
+      return btoa(args);
+    } catch {
+      return "Error: Failed to encode";
+    }
+  },
+
+  decode64: (args) => {
+    if (!args) return "Usage: decode64 <base64text>";
+    try {
+      return atob(args);
+    } catch {
+      return "Error: Invalid base64 string";
+    }
+  },
+
+  json: (args) => {
+    if (!args) return 'Usage: json \'{"key":"value"}\'';
+    try {
+      return JSON.stringify(JSON.parse(args), null, 2);
+    } catch {
+      return "Error: Invalid JSON";
+    }
+  },
+
+  hex: (args) => {
+    if (!args) return "Usage: hex <text>";
+    try {
+      return args.split("").map((c) => c.charCodeAt(0).toString(16).padStart(2, "0")).join(" ");
+    } catch {
+      return "Error encoding to hex";
+    }
+  },
+
+  cat: (args) => {
+    if (!args) return "Usage: cat <filename>";
+    const files: Record<string, string> = {
+      "package.json": '{\n  "name": "vibracode",\n  "version": "1.0.2",\n  "main": "expo-router/entry"\n}',
+      "app.json": '{\n  "expo": {\n    "name": "Vibra Code",\n    "slug": "vibracode",\n    "version": "1.0.2"\n  }\n}',
+      "README.md": "# Vibra Code\n\nAI-powered mobile app builder using React Native and Expo.",
+      "tsconfig.json": '{\n  "extends": "expo/tsconfig.base",\n  "compilerOptions": {\n    "strict": true\n  }\n}',
+    };
+    return files[args] || `cat: ${args}: No such file or directory`;
   },
 };
+
+// Parse command into name + args
+function parseCommand(input: string): { name: string; args: string } {
+  const parts = input.trim().split(/\s+/);
+  const name = parts[0]?.toLowerCase() || "";
+  const args = parts.slice(1).join(" ");
+  return { name, args };
+}
 
 interface TerminalLine {
   id: string;
@@ -80,24 +212,27 @@ export default function TerminalScreen() {
     {
       id: "0",
       type: "info",
-      content: "╔══════════════════════════╗\n║  VibraCode Terminal v2.0  ║\n╚══════════════════════════╝",
+      content: "╔════════════════════════════╗\n║  VibraCode Terminal v2.1  ║\n╚══════════════════════════╝",
     },
     {
       id: "1",
       type: "info",
-      content: `Type 'help' for available commands.\nMode: ${CONFIG.BACKEND_URL ? "☁️ Cloud Connected" : "📦 Local Mode"}`,
+      content: `Type 'help' for available commands.
+Platform: ${Platform.OS}${isWeb ? " (Web)" : " (Native)"}
+API: ${getApiBaseUrl() ? "Connected ☁️" : "Local Mode 📦"}`,
     },
   ]);
   const [input, setInput] = useState("");
   const [executing, setExecuting] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
+  const sessionStart = useRef(Date.now());
 
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
 
-  const backendUrl = (CONFIG.BACKEND_URL || "").replace(/\/$/, "");
-  const isCloud = !!backendUrl;
+  const apiBaseUrl = getApiBaseUrl();
+  const isCloud = !!apiBaseUrl;
 
   const addLine = useCallback(
     (type: TerminalLine["type"], content: string) => {
@@ -126,34 +261,64 @@ export default function TerminalScreen() {
       // Show input line
       addLine("input", `$ ${trimmed}`);
 
+      // Parse command
+      const { name, args } = parseCommand(trimmed);
+
       // Check built-in commands first
-      const builtin = BUILTIN_COMMANDS[trimmed.toLowerCase()];
+      const builtin = BUILTIN_COMMANDS[name];
       if (builtin) {
-        const result = builtin();
-        if (result === "__CLEAR__") {
-          setLines([]);
-        } else {
-          addLine("output", result);
+        try {
+          const result = await (typeof builtin === "function" ? builtin(args) : builtin);
+          if (result === "__CLEAR__") {
+            setLines([]);
+          } else if (result) {
+            addLine("output", String(result));
+          }
+        } catch (err: any) {
+          addLine("error", `Error: ${err?.message || "command failed"}`);
         }
         return;
       }
 
-      // If no backend, show error
-      if (!backendUrl) {
+      // Handle 'ping' specially as a built-in fetch test
+      if (name === "ping") {
+        const host = args || "google.com";
+        addLine("info", `Pinging ${host}...`);
+        try {
+          const start = Date.now();
+          const res = await fetch(`https://${host}`, { mode: "no-cors", cache: "no-store" });
+          const ms = Date.now() - start;
+          addLine("output", `Ping to ${host}: ${ms}ms (response received)`);
+        } catch {
+          addLine("error", `Ping to ${host}: failed (network error or CORS blocked)`);
+        }
+        return;
+      }
+
+      // Handle 'history' command
+      if (name === "history") {
+        const hist = history.length > 0 ? history.map((h, i) => `  ${i + 1}  ${h}`).join("\n") : "  (no history)";
+        addLine("output", `Command History:\n${hist}`);
+        return;
+      }
+
+      // If no API base, show error for remote commands
+      if (!apiBaseUrl) {
         addLine(
           "error",
-          "Backend not configured. Set EXPO_PUBLIC_BACKEND_URL to enable remote command execution.\nType 'help' for local commands."
+          `Command '${name}' requires a backend API.\nType 'help' for available built-in commands.\n\nTo enable remote commands, set EXPO_PUBLIC_BACKEND_URL.\nOn web deployment, the API is auto-detected.`
         );
         return;
       }
 
-      // Execute remote command
+      // Execute remote command via API
       setExecuting(true);
+      addLine("info", `Executing via ${apiBaseUrl}...`);
       try {
-        const res = await fetch(`${backendUrl}/terminal/execute`, {
+        const res = await fetch(`${apiBaseUrl}/terminal/execute`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ command: trimmed, cwd: "/home/user" }),
+          body: JSON.stringify({ command: trimmed, cwd: "/tmp", timeout: 15000 }),
         });
 
         if (!res.ok) {
@@ -179,13 +344,13 @@ export default function TerminalScreen() {
       } catch (err: any) {
         addLine(
           "error",
-          `Connection error: ${err?.message ?? "unknown"}\nMake sure the backend server is running.`
+          `Connection error: ${err?.message ?? "unknown"}\nMake sure the API server is accessible.`
         );
       } finally {
         setExecuting(false);
       }
     },
-    [backendUrl, addLine]
+    [apiBaseUrl, addLine, history]
   );
 
   const handleSend = useCallback(() => {
@@ -266,6 +431,11 @@ export default function TerminalScreen() {
         {lines.map((line) => (
           <TerminalLineView key={line.id} line={line} />
         ))}
+        {lines.length === 0 && (
+          <Text style={[s.line, { color: "#30363d" }]}>
+            Terminal cleared. Type 'help' for commands.
+          </Text>
+        )}
       </ScrollView>
 
       {/* Input Bar */}
@@ -284,6 +454,18 @@ export default function TerminalScreen() {
           autoCorrect={false}
           editable={!executing}
           selectTextOnFocus
+          {...(isWeb ? {
+            onKeyDown: (e: any) => {
+              // Handle up/down arrow keys for history on web
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                handleHistoryUp();
+              } else if (e.key === "ArrowDown") {
+                e.preventDefault();
+                handleHistoryDown();
+              }
+            },
+          } : {})}
         />
         <Pressable
           style={[s.sendBtn, input.trim() && s.sendBtnActive]}
@@ -422,6 +604,7 @@ const s = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: "#21262d",
+    outlineStyle: "none",
   },
   sendBtn: {
     width: 32,
