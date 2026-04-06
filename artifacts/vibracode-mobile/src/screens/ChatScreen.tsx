@@ -2,12 +2,12 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { Audio } from "expo-av";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,

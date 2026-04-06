@@ -11,7 +11,7 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef, useState } from "react";
 import { LogBox } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
+import { KeyboardAvoidingView } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 
@@ -82,15 +82,13 @@ export default function RootLayout() {
         <ConvexProvider client={convex}>
           <QueryClientProvider client={queryClient}>
             <GestureHandlerRootView style={{ flex: 1 }}>
-              <KeyboardProvider>
-                <SettingsProvider>
+              <SettingsProvider>
                   <ConvexChatBoundary fallbackChildren={<RootLayoutNav />}>
                     <ConvexChatProvider>
                       <RootLayoutNav />
                     </ConvexChatProvider>
                   </ConvexChatBoundary>
                 </SettingsProvider>
-              </KeyboardProvider>
             </GestureHandlerRootView>
           </QueryClientProvider>
         </ConvexProvider>
